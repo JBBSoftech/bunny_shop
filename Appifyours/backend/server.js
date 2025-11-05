@@ -222,104 +222,21 @@ app.get('/api/users/:id/orders', async (req, res) => {
 // Real-time configuration endpoint for mobile app updates
 app.get('/api/app-config', async (req, res) => {
   try {
-    // Connect to main Appifyours database to get latest configuration
-    const mainDbUri = process.env.MAIN_DB_URI || 'mongodb://localhost:27017/appifyours';
-    const mainDb = await mongoose.createConnection(mainDbUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-    
-    // Define schema for AdminElementScreen
-    const adminElementScreenSchema = new mongoose.Schema({}, { strict: false });
-    const AdminElementScreen = mainDb.model('AdminElementScreen', adminElementScreenSchema, 'adminElementScreens');
-    
-    // Fetch the admin configuration
-    const adminConfig = await AdminElementScreen.findOne({ userId: '69021d2a2b0d7cd49d0bf5b4' });
-    
-    if (!adminConfig) {
-      await mainDb.close();
-      return res.status(404).json({
-        success: false,
-        error: 'Admin configuration not found'
-      });
-    }
-    
+    // This would connect to your main database to get latest configuration
     const config = {
       adminId: '69021d2a2b0d7cd49d0bf5b4',
-      shopName: adminConfig.shopName || 'Bunny Shop',
-      appName: adminConfig.appName || 'Bunny Shop',
-      lastUpdated: adminConfig.updatedAt || new Date().toISOString(),
+      shopName: 'Bunny Shop',
+      lastUpdated: new Date().toISOString(),
+      // Add dynamic configuration based on your app structure
       features: {
         searchEnabled: true,
         cartEnabled: true,
         userRegistrationEnabled: true,
-        orderTrackingEnabled: true,
-        wishlistEnabled: true
-      },
-      theme: adminConfig.designSettings?.theme || {
-        primaryColor: '#2196F3',
-        secondaryColor: '#FF9800',
-        backgroundColor: '#FFFFFF',
-        textColor: '#000000'
-      },
-      storeInfo: adminConfig.dynamicFields?.storeInfo || {},
-      gstNumber: adminConfig.dynamicFields?.gstNumber || '18'
+        orderTrackingEnabled: true
+      }
     };
-    
-    await mainDb.close();
     res.json({ success: true, data: config });
   } catch (error) {
-    console.error('Error fetching app config:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Dynamic products endpoint - fetches from main Appifyours database
-app.get('/api/products/dynamic', async (req, res) => {
-  try {
-    // Connect to main Appifyours database
-    const mainDbUri = process.env.MAIN_DB_URI || 'mongodb://localhost:27017/appifyours';
-    const mainDb = await mongoose.createConnection(mainDbUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-    
-    // Define schema for AdminElementScreen
-    const adminElementScreenSchema = new mongoose.Schema({}, { strict: false });
-    const AdminElementScreen = mainDb.model('AdminElementScreen', adminElementScreenSchema, 'adminElementScreens');
-    
-    // Fetch the admin configuration
-    const adminConfig = await AdminElementScreen.findOne({ userId: '69021d2a2b0d7cd49d0bf5b4' });
-    
-    if (!adminConfig) {
-      await mainDb.close();
-      return res.status(404).json({
-        success: false,
-        error: 'Admin configuration not found'
-      });
-    }
-    
-    // Extract products from dynamicFields
-    const products = adminConfig.dynamicFields?.productCards || [];
-    
-    // Transform products to API format
-    const transformedProducts = products.map((product, index) => ({
-      _id: product.id || `product_${index}`,
-      name: product.productName || product.name || 'Unknown Product',
-      price: parseFloat(product.price || product.discountPrice || 0),
-      description: product.description || '',
-      image: product.image || '',
-      category: product.category || 'General',
-      inStock: true,
-      productName: product.productName || product.name || 'Unknown Product',
-      discountPrice: parseFloat(product.discountPrice || product.price || 0),
-      ...product
-    }));
-    
-    await mainDb.close();
-    res.json({ success: true, data: transformedProducts });
-  } catch (error) {
-    console.error('Error fetching dynamic products:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
