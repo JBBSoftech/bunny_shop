@@ -175,73 +175,7 @@ class WishlistManager extends ChangeNotifier {
   }
 }
 
-// API Configuration
-class ApiConfig {
-  // Backend API URL - Points to your server
-  // Update this with your production server URL before building release APK
-  static const String baseUrl = 'http://localhost:5000';
-  static const String adminId = '69021d2a2b0d7cd49d0bf5b4';
-  
-  // Helper to check if running on emulator/simulator
-  static bool get isEmulator {
-    // In release mode, this will always return false
-    return !const bool.fromEnvironment('dart.vm.product');
-  }
-}
-
-// API Service for dynamic data fetching
-class ApiService {
-  static Future<List<Map<String, dynamic>>> fetchProducts() async {
-    try {
-      print('📡 Fetching products from: \${ApiConfig.baseUrl}/api/products/dynamic');
-      
-      final response = await http.get(
-        Uri.parse('\${ApiConfig.baseUrl}/api/products/dynamic'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 10));
-      
-      print('📡 Response status: \${response.statusCode}');
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true && data['data'] is List) {
-          print('✅ Successfully fetched \${data['data'].length} products');
-          return List<Map<String, dynamic>>.from(data['data']);
-        }
-      } else {
-        print('⚠️ API returned status code: \${response.statusCode}');
-      }
-      return [];
-    } catch (e) {
-      print('❌ Error fetching products: $e');
-      print('⚠️ Make sure your backend server is running and accessible');
-      return [];
-    }
-  }
-  
-  static Future<Map<String, dynamic>?> fetchAppConfig() async {
-    try {
-      final response = await http.get(
-        Uri.parse('\${ApiConfig.baseUrl}/api/app-config?adminId=\${ApiConfig.adminId}'),
-        headers: {'Content-Type': 'application/json'},
-      );
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true) {
-          return data['data'] as Map<String, dynamic>;
-        }
-      }
-      return null;
-    } catch (e) {
-      print('Error fetching app config: $e');
-      return null;
-    }
-  }
-}
-
-// Initial product data (fallback for offline mode)
-final List<Map<String, dynamic>> _initialProductCards = [
+final List<Map<String, dynamic>> productCards = [
   {
     'productName': 'Product Name',
     'imageAsset': null,
@@ -249,7 +183,7 @@ final List<Map<String, dynamic>> _initialProductCards = [
     'discountPrice': '\$199',
   },
   {
-    'productName': 'sambar',
+    'productName': 'rasam',
     'imageAsset': 'data:image/png;base64,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',
     'price': '100',
     'discountPrice': '1',
@@ -324,50 +258,12 @@ class _HomePageState extends State<HomePage> {
   final WishlistManager _wishlistManager = WishlistManager();
   String _searchQuery = '';
   List<Map<String, dynamic>> _filteredProducts = [];
-  List<Map<String, dynamic>> productCards = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-    _loadData();
-  }
-  
-  // Load data from API or use initial data
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    
-    // Try to fetch from API first
-    final apiProducts = await ApiService.fetchProducts();
-    
-    if (apiProducts.isNotEmpty) {
-      // Use data from API if available
-      setState(() {
-        productCards = apiProducts;
-        _filteredProducts = List.from(productCards);
-        _isLoading = false;
-      });
-    } else {
-      // Fallback to initial data if API fails
-      setState(() {
-        productCards = List.from(_initialProductCards);
-        _filteredProducts = List.from(productCards);
-        _isLoading = false;
-      });
-    }
-    
-    // Also fetch app configuration for any updates
-    final config = await ApiService.fetchAppConfig();
-    if (config != null) {
-      print('App config loaded: $config');
-      // You can update app settings based on config here
-    }
-  }
-  
-  // Refresh data manually
-  Future<void> _refreshData() async {
-    await _loadData();
+    _filteredProducts = List.from(productCards);
   }
 
   @override
@@ -430,20 +326,6 @@ class _HomePageState extends State<HomePage> {
   );
 
   Widget _buildHomePage() {
-    // Show loading indicator while data is being fetched
-    if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading products...', style: TextStyle(fontSize: 16, color: Colors.grey)),
-          ],
-        ),
-      );
-    }
-    
     return Column(
       children: [
                   Container(
@@ -465,7 +347,7 @@ class _HomePageState extends State<HomePage> {
                         
                         const SizedBox(width: 8),
                         Text(
-                          'Anandh',
+                          'priya',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -536,12 +418,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _refreshData,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                children: [
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
                   Container(
                     height: 160,
                     child: Stack(
@@ -945,8 +824,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
