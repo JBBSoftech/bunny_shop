@@ -110,7 +110,20 @@ class CartManager extends ChangeNotifier {
     return subtotal + tax;
   }
   
+  double get totalDiscount {
+    return _items.fold(0.0, (sum, item) => 
+      sum + ((item.price - item.effectivePrice) * item.quantity));
+  }
+  
+  double get gstAmount {
+    return PriceUtils.calculateTax(subtotal, 18.0); // 18% GST
+  }
+  
   double get finalTotal {
+    return subtotal + gstAmount;
+  }
+  
+  double get finalTotalWithShipping {
     return PriceUtils.applyShipping(totalWithTax, 5.99); // $5.99 shipping
   }
 }
@@ -162,7 +175,58 @@ class WishlistManager extends ChangeNotifier {
   }
 }
 
-final List<Map<String, dynamic>> productCards = [
+// API Configuration - Update this with your backend URL
+class ApiConfig {
+  // IMPORTANT: Change this to your actual backend URL
+  static const String baseUrl = 'http://localhost:3000'; // Replace with your server URL
+  static const String adminId = '69021d2a2b0d7cd49d0bf5b4'; // Admin ID for fetching configuration
+}
+
+// API Service for dynamic data fetching
+class ApiService {
+  static Future<List<Map<String, dynamic>>> fetchProducts() async {
+    try {
+      final response = await http.get(
+        Uri.parse('\${ApiConfig.baseUrl}/api/products/dynamic'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+      }
+      return [];
+    } catch (e) {
+      print('Error fetching products: $e');
+      return [];
+    }
+  }
+  
+  static Future<Map<String, dynamic>?> fetchAppConfig() async {
+    try {
+      final response = await http.get(
+        Uri.parse('\${ApiConfig.baseUrl}/api/app-config?adminId=\${ApiConfig.adminId}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          return data['data'] as Map<String, dynamic>;
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error fetching app config: $e');
+      return null;
+    }
+  }
+}
+
+// Initial product data (fallback for offline mode)
+final List<Map<String, dynamic>> _initialProductCards = [
 ];
 
 
@@ -227,12 +291,50 @@ class _HomePageState extends State<HomePage> {
   final WishlistManager _wishlistManager = WishlistManager();
   String _searchQuery = '';
   List<Map<String, dynamic>> _filteredProducts = [];
+  List<Map<String, dynamic>> productCards = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-    _filteredProducts = List.from(productCards);
+    _loadData();
+  }
+  
+  // Load data from API or use initial data
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    
+    // Try to fetch from API first
+    final apiProducts = await ApiService.fetchProducts();
+    
+    if (apiProducts.isNotEmpty) {
+      // Use data from API if available
+      setState(() {
+        productCards = apiProducts;
+        _filteredProducts = List.from(productCards);
+        _isLoading = false;
+      });
+    } else {
+      // Fallback to initial data if API fails
+      setState(() {
+        productCards = List.from(_initialProductCards);
+        _filteredProducts = List.from(productCards);
+        _isLoading = false;
+      });
+    }
+    
+    // Also fetch app configuration for any updates
+    final config = await ApiService.fetchAppConfig();
+    if (config != null) {
+      print('App config loaded: $config');
+      // You can update app settings based on config here
+    }
+  }
+  
+  // Refresh data manually
+  Future<void> _refreshData() async {
+    await _loadData();
   }
 
   @override
@@ -295,6 +397,20 @@ class _HomePageState extends State<HomePage> {
   );
 
   Widget _buildHomePage() {
+    // Show loading indicator while data is being fetched
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading products...', style: TextStyle(fontSize: 16, color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+    
     return Column(
       children: [
                   Container(
@@ -302,10 +418,21 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     child: Row(
                       children: [
-                        const Icon(Icons.store, size: 32, color: Colors.white),
+                                                Container(
+                          width: 32,
+                          height: 32,
+                          child: Image.memory(
+                                base64Decode('iVBORw0KGgoAAAANSUhEUgAAAEIAAABCCAYAAADjVADoAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAeASURBVHgB5ZtPaBRXHMd/EQUFLZuAhUaqGyMt1IiRVttDq+NJb65HvWTSHi0Yodd2Nwg9FUwOvbqbk0fXm552bXsopmCkaaFF3SiNgoUkoJBAhdf3fTMvzsy+mffmzWSzGz/wstmZN7Pzfu/3fv9mhmiTYIwVeJvgrcHbfd5cepvgAy7yVuZtmbXT4q2KPrRV4YNz/Nk3BX1LtBXw1b8cM/umtHhze1JL/Nm/mVEAKqo4N3UzLGz8NpoW87SkQN0C82b/Gst/9k0FUmWbuWxYeuO30TRYp1wwy8f4bTQt5mlokfKGeb6/wXqPKjMUSJ9JJ5yQf7jUmzT7+vpO6zppBeFLtEW9TT8XxkpSh22k5zL1PhO6DiYaAW0oUk4sLK1R8+ESPVlapZW117Sy+poKu7ZTYed2OrpvDxUHdtEo/8yZFa4R/UkdtiftZJ47KlJGmg+X6db8C6rde84H/p+2P4ThHOqnseOD4jMH4O0cLoxmXIdEjeAHN/iHQ5ZAAJN3HolPWyCI8pnhkECmf3pK9d9f0LXSh2m0J9Foxgoii5GEuo/f+ENcbF64JwaFQGZmF6ly+7HYVhrZSze/Gk1zmtNxWpG0NMpkwdziSzp//QG3BavK/YVdO8gZ7uczuZsO8CUggc2YW3xFzUfLyuVTu/eMC/bf0D4IPCVI65uqHUpBMC+ZcSgl0IDxG38qB4LBl88OG615LKUZPvDa7LPQdhP7omGMj62icqVxGgHJFSkFUhOipBHA+jG8r7ANZw+Kc+LcOYEJdnmbiu6IiyNSLQu4RJUQsKYbX39ibfnhPUpH9lLOnFNtbBME8wofRUrB6R9/a7MJ1QsjVOEzGgeEh+OO/fCrWAYq4HGkYcwRhymKOyqNGKMUwIhFhQBNcE+8l3jc+I15YQug9i73MCrDtwFCkLRFyyFB+C7TJUMwq5N3whfr8iAoSRPiUBnCiZMHYvvD+1w+tZ8scVikuhWKI/xIskqGQBsQL0iwphuXPhafSccgIIoaQBxTOXOQxni80CEmufeoyC9RQaTKK4au/hJaFtULh0XgE/vLBmsex+M8HSCUf6wvDebdQyiSIQh+gkJA4pTkHbCMTNY8NCbOeMad15JC0GgGbUSqdPsuzyCDlEbeTVwSM/cWw1fB13ixf6do+D+IaWgOgzt09WehmZaxxnqYIAThG0mHUoBQOMgpTawQnbmJk+9T67svRLv/zachYUQFo/x97nGQzXrnXqXJ24/IAkeW8mRkmTqviLpMXRYo9s+++V7h3qY2+1zkHM7wgHC3c/+8FP0QieooDuwMfZ979ooscXE5UhAOpSQ6wzpBwBtg8EE3CWGiIZkCWFrViyPC3uiIak2GPOQy14qpbbbFl7Q/jMFdK32Q2AdCQbRpklVGhWWRia6fijcXNqJjNUm4xta3nwvDGmcHIIzpu0+ow5yDIFbIgnbV1M8IXCMiUSRSy9873Eh+5sUex8OxB2yHjujvmSynBAo4+hZZ2AgYq7nF8HpPshOw8jIKrflxAuwGjhnd905b7UGHKjLNwDQEUSPPa6S6szw6uCd0MboZiXoZJFpy8AjOgiC20PEgKgiDY+IujUeYtW1+tWaaUoKiCYouuAAUUXUzUjrSbhegJWhRw2uSb9Tnw0HXOX5+S5r4I3KNTt3Nmrr7lK7U/0rsA+GimJMEXDciyiAwwpbLY4grw4KILPEPxRQ182SCp80wjqoLhragjmFSlUbyFkRopp0Qmv7Y32SffgLSIEuSkp9oFCi28Rl9EjjGdEZV2qDLehM4zwVRxz/rFg71fi4M2IvUj+PoVB5ZaeNSWN2PcU8RFIRJfgHOX58LfYfwLIWwIIUAoqW61EYT3JpPzhZV2lLmRRgMAgKAsTWJA7Akom4T57FkMvgl+usocyPSzO0hLQz05pdH27YjfsByMEVV1EEg5tpXtJrBLyFBwJXy5YEOuT3oWb3wUaa723G3D6FN5bPW2lCTRlKiqmJbLY84rtT/TlVxCoIIFOV+lRB0tVENM9ENypvAae+CI2PU3fGWxdlThwaUXkQCe4IbvSi6qO6f5iAEGMmh6MY4C2WVfwBRghN5SNioYVCun2t4D4PsXi/XLSyviegSxyS5YcQL1YuHs+YVk6qNcYKoUYr8o9iPC1sWA8NswSbAsEUDH4ksyJjiBVsHRUCWkQXe6qodSc9HSA+iPzsfFOwA4v2gYfRqiY9TZ5YScRPn5H4hgIxptgRGcly1I0kQDmWININAIPJWP2qLSdUtDH50cLcQKlxjTgKQDEW9hWRDHx2KA7YAbjF8X2SH0KYkQ5oRu0eHQJ5a0QWMo+4Qt9Pk8UL4xe55HcAOpcsMYvLAaa4B1iZR13Uw0Qhog/3zgd1BrJGUaDXCL+U1qXep6YQATJYGgO+dod6jSTGRZCaY997GFPNeDulW8FJNhXXqfS/mvVzWYN1Dg23mG4DM05Ia2xwtwexPsW56BZJ573u5HRJIg3mvVnZ3fMO8NwBrLF8w+3ip1qFeg3nLJquWdNb4bTR8ICWW/iV5h7YqLNm4ytkv0tsE85bNfdYFxu9/l1tN34bnRMUAAAAASUVORK5CYII='),
+                                width: 32,
+                                height: 32,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.store, size: 32, color: Colors.white),
+                              ),
+                        ),
+                        
                         const SizedBox(width: 8),
                         Text(
-                          'My Store',
+                          'jeeva Anandhan',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -376,9 +503,12 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
         Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
+          child: RefreshIndicator(
+            onRefresh: _refreshData,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
                   Container(
                     height: 160,
                     child: Stack(
@@ -527,7 +657,8 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -541,17 +672,20 @@ class _HomePageState extends State<HomePage> {
         title: const Text('Shopping Cart'),
         automaticallyImplyLeading: false,
       ),
-      body: _cartManager.items.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('Your cart is empty', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                ],
-              ),
-            )
+      body: ListenableBuilder(
+        listenable: _cartManager,
+        builder: (context, child) {
+          return _cartManager.items.isEmpty
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text('Your cart is empty', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                    ],
+                  ),
+                )
           : Column(
               children: [
                 Expanded(
@@ -593,7 +727,25 @@ class _HomePageState extends State<HomePage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    Text(PriceUtils.formatPrice(item.effectivePrice)),
+                                    // Show current price (effective price)
+                                    Text(
+                                      PriceUtils.formatPrice(item.effectivePrice),
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue,
+                                      ),
+                                    ),
+                                    // Show original price if there's a discount
+                                    if (item.discountPrice > 0 && item.price != item.discountPrice)
+                                      Text(
+                                        PriceUtils.formatPrice(item.price),
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          decoration: TextDecoration.lineThrough,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
@@ -625,58 +777,76 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                 ),
+                // Bill Summary Section
                 Container(
+                  margin: const EdgeInsets.all(16),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    border: const Border(top: BorderSide(color: Colors.grey)),
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[300]!),
                   ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Subtotal:', style: TextStyle(fontSize: 16)),
-                          Text(PriceUtils.formatPrice(_cartManager.subtotal), style: const TextStyle(fontSize: 16)),
-                        ],
+                      const Text(
+                        'Bill Summary',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Tax (8%):', style: TextStyle(fontSize: 16)),
-                          Text(PriceUtils.formatPrice(PriceUtils.calculateTax(_cartManager.subtotal, 8.0)), style: const TextStyle(fontSize: 16)),
-                        ],
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Subtotal', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                            Text(PriceUtils.formatPrice(_cartManager.subtotal), style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Shipping:', style: TextStyle(fontSize: 16)),
-                          Text(PriceUtils.formatPrice(5.99), style: const TextStyle(fontSize: 16)),
-                        ],
+                      if (_cartManager.totalDiscount > 0)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Discount', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                              Text('-$0.00', style: const TextStyle(fontSize: 14, color: Colors.green)),
+                            ],
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('GST (18%)', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                            Text(PriceUtils.formatPrice(_cartManager.gstAmount), style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                          ],
+                        ),
                       ),
-                      const Divider(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Total:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          Text(PriceUtils.formatPrice(_cartManager.finalTotal), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {},
-                          child: const Text('Checkout'),
+                      const Divider(thickness: 1),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Total', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+                            Text(PriceUtils.formatPrice(_cartManager.finalTotal), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
               ],
-            ),
+            );
+        },
+      ),
     );
   }
 
@@ -771,39 +941,61 @@ class _HomePageState extends State<HomePage> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          children: [            const Text(
-              'User Profile',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            const TextField(
-              decoration: InputDecoration(
-                labelText: 'Name',
-                hintText: 'Enter your name',
+          children: [            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircleAvatar(
+                    radius: 60,
+                    backgroundColor: Colors.grey,
+                    child: Icon(Icons.person, size: 60, color: Colors.white),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'John Doe',
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(250, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () {
+                      // Refund button action
+                    },
+                    child: const Text(
+                      'Refund',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(250, 50),
+                      side: const BorderSide(color: Colors.grey),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () {
+                      // Log Out button action
+                    },
+                    child: const Text(
+                      'Log Out',
+                      style: TextStyle(fontSize: 18, color: Colors.black),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            const TextField(
-              decoration: InputDecoration(
-                labelText: 'Email',
-                hintText: 'Enter your email',
-              ),
-            ),
-            const SizedBox(height: 12),
-            const TextField(
-              decoration: InputDecoration(
-                labelText: 'Phone',
-                hintText: 'Enter your phone number',
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Profile saved')),
-                );
-              },
-              child: const Text('Save Profile'),
             ),          ],
         ),
       ),
@@ -845,4 +1037,5 @@ class _HomePageState extends State<HomePage> {
       ],
     );
   }
+
 }
