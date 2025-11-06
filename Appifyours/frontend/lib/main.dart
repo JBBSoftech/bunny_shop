@@ -259,53 +259,66 @@ class _HomePageState extends State<HomePage> {
   String _searchQuery = '';
   List<Map<String, dynamic>> _filteredProducts = [];
   
-  // Dynamic product list and loading state
+  // Dynamic product list - will be populated from API
   List<Map<String, dynamic>> productCards = [];
   bool _isLoading = true;
-  Map<String, dynamic> _currentStoreInfo = {};
+  Map<String, dynamic> _currentStoreInfo = storeInfo;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-    _loadData();
+    _loadData(); // Fetch data from API on app start
   }
   
-  // Load data from API
+  // Load data dynamically from backend API
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     
-    // Fetch products from API
-    final apiProducts = await ApiService.fetchProducts();
-    
-    if (apiProducts.isNotEmpty) {
-      // Use API data if available
-      setState(() {
-        productCards = apiProducts;
-        _filteredProducts = List.from(productCards);
-        _isLoading = false;
-      });
-    } else {
-      // Fallback to initial data if API fails
+    try {
+      // Fetch latest products from API
+      final apiProducts = await ApiService.fetchProducts();
+      
+      if (apiProducts.isNotEmpty) {
+        // Use API data if available
+        setState(() {
+          productCards = apiProducts;
+          _filteredProducts = List.from(productCards);
+          _isLoading = false;
+        });
+        print('✅ Loaded ${apiProducts.length} products from API');
+      } else {
+        // Fallback to initial data if API returns empty
+        setState(() {
+          productCards = List.from(_initialProductCards);
+          _filteredProducts = List.from(productCards);
+          _isLoading = false;
+        });
+        print('⚠️ Using initial data (API returned empty)');
+      }
+      
+      // Fetch app configuration
+      final config = await ApiService.fetchAppConfig();
+      if (config != null) {
+        setState(() {
+          _currentStoreInfo = config['storeInfo'] ?? storeInfo;
+        });
+        print('✅ App config updated from API');
+      }
+    } catch (e) {
+      // Fallback to initial data on error
       setState(() {
         productCards = List.from(_initialProductCards);
         _filteredProducts = List.from(productCards);
         _isLoading = false;
       });
-    }
-    
-    // Fetch app configuration
-    final config = await ApiService.fetchAppConfig();
-    if (config != null) {
-      print('App config loaded: ${config}');
-      setState(() {
-        _currentStoreInfo = config['storeInfo'] ?? storeInfo;
-      });
+      print('⚠️ Error loading data, using initial data: $e');
     }
   }
   
   // Refresh data when user pulls down
   Future<void> _refreshData() async {
+    print('🔄 Refreshing data from API...');
     await _loadData();
   }
 
@@ -369,7 +382,7 @@ class _HomePageState extends State<HomePage> {
   );
 
   Widget _buildHomePage() {
-    // Show loading indicator while fetching data
+    // Show loading indicator while fetching data from API
     if (_isLoading) {
       return const Center(
         child: Column(
@@ -404,7 +417,7 @@ class _HomePageState extends State<HomePage> {
                         
                         const SizedBox(width: 8),
                         Text(
-                          'jeeva anandhan',
+                          'jeevs jeevs',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -525,7 +538,8 @@ class _HomePageState extends State<HomePage> {
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                 ),
-                                child: Text('Grillland', style: const TextStyle(fontSize: 12)),
+                                child: Text('Grill
+', style: const TextStyle(fontSize: 12)),
                               ),
                             ],
                           ),
