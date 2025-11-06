@@ -258,12 +258,55 @@ class _HomePageState extends State<HomePage> {
   final WishlistManager _wishlistManager = WishlistManager();
   String _searchQuery = '';
   List<Map<String, dynamic>> _filteredProducts = [];
+  
+  // Dynamic product list and loading state
+  List<Map<String, dynamic>> productCards = [];
+  bool _isLoading = true;
+  Map<String, dynamic> _currentStoreInfo = {};
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-    _filteredProducts = List.from(productCards);
+    _loadData();
+  }
+  
+  // Load data from API
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    
+    // Fetch products from API
+    final apiProducts = await ApiService.fetchProducts();
+    
+    if (apiProducts.isNotEmpty) {
+      // Use API data if available
+      setState(() {
+        productCards = apiProducts;
+        _filteredProducts = List.from(productCards);
+        _isLoading = false;
+      });
+    } else {
+      // Fallback to initial data if API fails
+      setState(() {
+        productCards = List.from(_initialProductCards);
+        _filteredProducts = List.from(productCards);
+        _isLoading = false;
+      });
+    }
+    
+    // Fetch app configuration
+    final config = await ApiService.fetchAppConfig();
+    if (config != null) {
+      print('App config loaded: ${config}');
+      setState(() {
+        _currentStoreInfo = config['storeInfo'] ?? storeInfo;
+      });
+    }
+  }
+  
+  // Refresh data when user pulls down
+  Future<void> _refreshData() async {
+    await _loadData();
   }
 
   @override
@@ -326,6 +369,20 @@ class _HomePageState extends State<HomePage> {
   );
 
   Widget _buildHomePage() {
+    // Show loading indicator while fetching data
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading latest data...', style: TextStyle(fontSize: 16, color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+    
     return Column(
       children: [
                   Container(
@@ -347,7 +404,7 @@ class _HomePageState extends State<HomePage> {
                         
                         const SizedBox(width: 8),
                         Text(
-                          'jeeva anandhann',
+                          'jeeva anandhan',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -418,9 +475,12 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
         Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
+          child: RefreshIndicator(
+            onRefresh: _refreshData,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
                   Container(
                     height: 160,
                     child: Stack(
@@ -824,7 +884,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
