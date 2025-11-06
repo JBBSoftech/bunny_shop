@@ -175,12 +175,78 @@ class WishlistManager extends ChangeNotifier {
   }
 }
 
-final List<Map<String, dynamic>> productCards = [
+// API Configuration
+class ApiConfig {
+  // Backend API URL - Points to your server
+  // Update this with your production server URL before building release APK
+  static const String baseUrl = 'http://localhost:5000';
+  static const String adminId = '69021d2a2b0d7cd49d0bf5b4';
+  
+  // Helper to check if running on emulator/simulator
+  static bool get isEmulator {
+    // In release mode, this will always return false
+    return !const bool.fromEnvironment('dart.vm.product');
+  }
+}
+
+// API Service for dynamic data fetching
+class ApiService {
+  static Future<List<Map<String, dynamic>>> fetchProducts() async {
+    try {
+      print('📡 Fetching products from: \${ApiConfig.baseUrl}/api/products/dynamic');
+      
+      final response = await http.get(
+        Uri.parse('\${ApiConfig.baseUrl}/api/products/dynamic'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+      
+      print('📡 Response status: \${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          print('✅ Successfully fetched \${data['data'].length} products');
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+      } else {
+        print('⚠️ API returned status code: \${response.statusCode}');
+      }
+      return [];
+    } catch (e) {
+      print('❌ Error fetching products: $e');
+      print('⚠️ Make sure your backend server is running and accessible');
+      return [];
+    }
+  }
+  
+  static Future<Map<String, dynamic>?> fetchAppConfig() async {
+    try {
+      final response = await http.get(
+        Uri.parse('\${ApiConfig.baseUrl}/api/app-config?adminId=\${ApiConfig.adminId}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          return data['data'] as Map<String, dynamic>;
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error fetching app config: $e');
+      return null;
+    }
+  }
+}
+
+// Initial product data (fallback for offline mode)
+final List<Map<String, dynamic>> _initialProductCards = [
   {
-    'productName': 'Product Name',
+    'productName': 'okok',
     'imageAsset': null,
-    'price': '\$299',
-    'discountPrice': '\$199',
+    'price': '299',
+    'discountPrice': '199',
   },
   {
     'productName': 'rasam',
@@ -258,12 +324,50 @@ class _HomePageState extends State<HomePage> {
   final WishlistManager _wishlistManager = WishlistManager();
   String _searchQuery = '';
   List<Map<String, dynamic>> _filteredProducts = [];
+  List<Map<String, dynamic>> productCards = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-    _filteredProducts = List.from(productCards);
+    _loadData();
+  }
+  
+  // Load data from API or use initial data
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    
+    // Try to fetch from API first
+    final apiProducts = await ApiService.fetchProducts();
+    
+    if (apiProducts.isNotEmpty) {
+      // Use data from API if available
+      setState(() {
+        productCards = apiProducts;
+        _filteredProducts = List.from(productCards);
+        _isLoading = false;
+      });
+    } else {
+      // Fallback to initial data if API fails
+      setState(() {
+        productCards = List.from(_initialProductCards);
+        _filteredProducts = List.from(productCards);
+        _isLoading = false;
+      });
+    }
+    
+    // Also fetch app configuration for any updates
+    final config = await ApiService.fetchAppConfig();
+    if (config != null) {
+      print('App config loaded: $config');
+      // You can update app settings based on config here
+    }
+  }
+  
+  // Refresh data manually
+  Future<void> _refreshData() async {
+    await _loadData();
   }
 
   @override
@@ -326,6 +430,20 @@ class _HomePageState extends State<HomePage> {
   );
 
   Widget _buildHomePage() {
+    // Show loading indicator while data is being fetched
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading products...', style: TextStyle(fontSize: 16, color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+    
     return Column(
       children: [
                   Container(
@@ -347,7 +465,7 @@ class _HomePageState extends State<HomePage> {
                         
                         const SizedBox(width: 8),
                         Text(
-                          'jeeva anandhannnnnn',
+                          'jeeva',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -418,9 +536,12 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
         Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
+          child: RefreshIndicator(
+            onRefresh: _refreshData,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
                   Container(
                     height: 160,
                     child: Stack(
@@ -526,6 +647,29 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         
                         const SizedBox(height: 8),
+                        // Show message if no products available
+                        if (productCards.isEmpty)
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32.0),
+                              child: Column(
+                                children: [
+                                  Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No products available',
+                                    style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Pull down to refresh',
+                                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
                         GridView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
@@ -824,7 +968,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
