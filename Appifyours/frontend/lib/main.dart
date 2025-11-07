@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 
 // Define PriceUtils class
@@ -175,16 +176,7 @@ class WishlistManager extends ChangeNotifier {
   }
 }
 
-final List<Map<String, dynamic>> productCards = [
-  {
-    'productName': 'Product ',
-    'imageAsset': null,
-    'price': '299',
-    'discountPrice': '199',
-  }
-];
-
-
+$dynamicServiceCode
 void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
@@ -246,17 +238,60 @@ class _HomePageState extends State<HomePage> {
   final WishlistManager _wishlistManager = WishlistManager();
   String _searchQuery = '';
   List<Map<String, dynamic>> _filteredProducts = [];
+  bool _isLoading = true;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-    _filteredProducts = List.from(productCards);
+    _loadInitialData();
+    _startPolling();
+  }
+
+  Future<void> _loadInitialData() async {
+    setState(() => _isLoading = true);
+    
+    // Try to fetch dynamic data first
+    final config = await DynamicDataService.fetchConfiguration();
+    
+    if (config != null) {
+      // Update global variables with fetched data
+      productCards = DynamicDataService.getProductCards();
+      gstNumber = DynamicDataService.getGstNumber();
+      selectedCategory = DynamicDataService.getSelectedCategory();
+      storeInfo = DynamicDataService.getStoreInfo();
+    } else {
+      // Use fallback data if API fails
+      productCards = List.from(fallbackProductCards);
+      gstNumber = DynamicDataService.getGstNumber();
+      selectedCategory = DynamicDataService.getSelectedCategory();
+      storeInfo = DynamicDataService.getStoreInfo();
+    }
+    
+    setState(() {
+      _filteredProducts = List.from(productCards);
+      _isLoading = false;
+    });
+  }
+
+  void _startPolling() {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      final hasUpdates = await DynamicDataService.checkForUpdates();
+      if (hasUpdates) {
+        await _loadInitialData();
+      }
+    });
+  }
+
+  Future<void> _refreshData() async {
+    await _loadInitialData();
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _pollingTimer?.cancel();
     super.dispose();
   }
 
@@ -314,8 +349,23 @@ class _HomePageState extends State<HomePage> {
   );
 
   Widget _buildHomePage() {
-    return Column(
-      children: [
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading configuration...', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+      );
+    }
+    
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: Column(
+        children: [
                   Container(
                     color: Color(0xff2196f3),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -324,7 +374,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'jeeva  anandhann',
+                          'jeeva',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -429,10 +479,11 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
                   Container(
                     padding: const EdgeInsets.all(12),
                     color: Color(0xFFFFFFFF),
@@ -717,11 +768,12 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
