@@ -176,7 +176,106 @@ class WishlistManager extends ChangeNotifier {
   }
 }
 
-$dynamicServiceCode
+// Dynamic Data Service for MongoDB Integration
+class DynamicDataService {
+  static const String baseUrl = 'https://your-backend-url.com'; // Replace with your backend URL
+  static const String screenId = 'Bunny Shop'; // Screen identifier
+  static Map<String, dynamic>? _cachedData;
+  static String? _lastModified;
+  
+  static Future<Map<String, dynamic>?> fetchConfiguration() async {
+    try {
+      final response = await http.get(
+        Uri.parse('\$baseUrl/api/form-screen-config/\$screenId'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          _cachedData = data['data'];
+          _lastModified = data['data']['lastModified'];
+          return _cachedData;
+        }
+      }
+    } catch (e) {
+      print('Error fetching configuration: \$e');
+    }
+    return null;
+  }
+  
+  static Future<bool> checkForUpdates() async {
+    try {
+      final response = await http.get(
+        Uri.parse('\$baseUrl/api/form-screen-config/check/\$screenId?lastModified=\$_lastModified'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 5));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] == true && data['hasUpdates'] == true;
+      }
+    } catch (e) {
+      print('Error checking for updates: \$e');
+    }
+    return false;
+  }
+  
+  static List<Map<String, dynamic>> getProductCards() {
+    if (_cachedData != null && _cachedData!['dynamicFields'] != null) {
+      final productCards = _cachedData!['dynamicFields']['productCards'];
+      if (productCards is List) {
+        return List<Map<String, dynamic>>.from(productCards);
+      }
+    }
+    return fallbackProductCards;
+  }
+  
+  static String getGstNumber() {
+    if (_cachedData != null && _cachedData!['dynamicFields'] != null) {
+      return _cachedData!['dynamicFields']['gstNumber'] ?? '18';
+    }
+    return '18';
+  }
+  
+  static String getSelectedCategory() {
+    if (_cachedData != null && _cachedData!['dynamicFields'] != null) {
+      return _cachedData!['dynamicFields']['selectedCategory'] ?? 'Piece';
+    }
+    return 'Piece';
+  }
+  
+  static Map<String, dynamic> getStoreInfo() {
+    if (_cachedData != null && _cachedData!['dynamicFields'] != null) {
+      final storeInfo = _cachedData!['dynamicFields']['storeInfo'];
+      if (storeInfo is Map<String, dynamic>) {
+        return storeInfo;
+      }
+    }
+    return fallbackStoreInfo;
+  }
+}
+
+// Fallback data (embedded in APK for offline support)
+final List<Map<String, dynamic>> fallbackProductCards = [
+  {
+    'productName': 'Product ',
+    'imageAsset': null,
+    'price': '299',
+    'discountPrice': '199',
+  }
+];
+
+
+
+final Map<String, dynamic> fallbackStoreInfo = {
+  'storeName': 'My Store',
+  'address': '123 Main St',
+  'email': 'support@example.com',
+  'phone': '(123) 456-7890',
+};
+
+
 void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
@@ -240,11 +339,26 @@ class _HomePageState extends State<HomePage> {
   List<Map<String, dynamic>> _filteredProducts = [];
   bool _isLoading = true;
   Timer? _pollingTimer;
+  
+  // Dynamic data variables
+  List<Map<String, dynamic>> productCards = [];
+  String gstNumber = '';
+  String selectedCategory = '';
+  Map<String, dynamic> storeInfo = {};
+  List<Map<String, dynamic>> fallbackProductCards = [];
+  Map<String, dynamic> fallbackStoreInfo = {
+    'storeName': 'My Store',
+    'address': '123 Main St',
+    'email': 'support@example.com',
+    'phone': '(123) 456-7890',
+  };
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
+    // Initialize fallback data - will be populated from generated code
+    fallbackProductCards = [];
     _loadInitialData();
     _startPolling();
   }
@@ -374,7 +488,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'jeeva',
+                          'priyooo',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -520,7 +634,7 @@ class _HomePageState extends State<HomePage> {
                                   }).toList();
                             if (index >= filteredProducts.length) return const SizedBox();
                             final product = filteredProducts[index];
-                            final productId = 'product_$index';
+                            final productId = 'product_\$index';
                             final isInWishlist = _wishlistManager.isInWishlist(productId);
                             return Card(
                               elevation: 3,
@@ -587,9 +701,9 @@ class _HomePageState extends State<HomePage> {
                                                 final wishlistItem = WishlistItem(
                                                   id: productId,
                                                   name: product['productName'] ?? 'Product',
-                                                  price: double.tryParse(product['price']?.replaceAll('\$','') ?? '0') ?? 0.0,
+                                                  price: double.tryParse(product['price']?.replaceAll('\\\$','') ?? '0') ?? 0.0,
                                                   discountPrice: product['discountPrice'] != null && product['discountPrice'].isNotEmpty
-                                                      ? double.tryParse(product['discountPrice'].replaceAll('\$','') ?? '0') ?? 0.0
+                                                      ? double.tryParse(product['discountPrice'].replaceAll('\\\$','') ?? '0') ?? 0.0
                                                       : 0.0,
                                                   image: product['imageAsset'],
                                                 );
@@ -630,7 +744,7 @@ class _HomePageState extends State<HomePage> {
                                             children: [
                                               // Current/Final Price (always without strikethrough)
                                               Text(
-                                                                                                product['price'] ?? '$0'
+                                                                                                product['price'] ?? '\$0'
                                                 ,
                                                 style: const TextStyle(
                                                   fontSize: 14,
