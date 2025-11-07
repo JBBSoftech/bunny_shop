@@ -178,7 +178,7 @@ class WishlistManager extends ChangeNotifier {
 
 // Dynamic Data Service for MongoDB Integration
 class DynamicDataService {
-  static const String baseUrl = 'https://your-backend-url.com'; // Replace with your backend URL
+  static const String baseUrl = 'http://localhost:5000'; // Dynamic backend URL
   static const String screenId = 'Bunny Shop'; // Screen identifier
   static Map<String, dynamic>? _cachedData;
   static String? _lastModified;
@@ -481,14 +481,14 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         children: [
                   Container(
-                    color: Color(0xff2196f3),
+                    color: Color(0xFF2196f3),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     child: Row(
                       children: [
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'priya',
+                          storeInfo['storeName'] ?? 'jeevs',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
