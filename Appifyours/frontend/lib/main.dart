@@ -177,16 +177,10 @@ class WishlistManager extends ChangeNotifier {
 
 final List<Map<String, dynamic>> productCards = [
   {
-    'productName': 'rasam',
+    'productName': 'Product ',
     'imageAsset': null,
     'price': '299',
-    'discountPrice': '1',
-  },
-  {
-    'productName': 'sambar',
-    'imageAsset': null,
-    'price': '23',
-    'discountPrice': '1',
+    'discountPrice': '199',
   }
 ];
 
@@ -238,6 +232,446 @@ class MyApp extends StatelessWidget {
   );
 }
 
+/// Dynamic Mobile App with real-time MongoDB synchronization
+/// This provides hot-reload-like experience in production APK
+class DynamicMobileApp extends StatefulWidget {
+  final String shopId;
+  final String? baseUrl;
+  
+  const DynamicMobileApp({
+    Key? key,
+    required this.shopId,
+    this.baseUrl,
+  }) : super(key: key);
+
+  @override
+  State<DynamicMobileApp> createState() => _DynamicMobileAppState();
+}
+
+class _DynamicMobileAppState extends State<DynamicMobileApp> {
+  final DynamicDataService _dynamicDataService = DynamicDataService();
+  bool _isInitialized = false;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    try {
+      await _dynamicDataService.initialize(
+        shopId: widget.shopId,
+        baseUrl: widget.baseUrl ?? 'http://localhost:3000',
+        enableRealTimeSync: true,
+        pollingIntervalSeconds: 3,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+          _error = '';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isInitialized = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _dynamicDataService.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Dynamic Mobile App',
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      home: _buildApp(),
+      debugShowCheckedModeBanner: false,
+    );
+  }
+
+  Widget _buildApp() {
+    if (!_isInitialized && _error.isEmpty) {
+      return _buildLoadingScreen();
+    }
+    
+    if (_error.isNotEmpty) {
+      return _buildErrorScreen();
+    }
+
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: _dynamicDataService.configStream,
+      builder: (context, configSnapshot) {
+        return StreamBuilder<List<dynamic>>(
+          stream: _dynamicDataService.widgetsStream,
+          builder: (context, widgetsSnapshot) {
+            final config = configSnapshot.data ?? {};
+            final widgets = widgetsSnapshot.data ?? [];
+            
+            return DynamicHomePage(
+              config: config,
+              widgets: widgets,
+              onRefresh: () => _dynamicDataService.forceRefresh(),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLoadingScreen() {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.blue, Colors.purple],
+          ),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ShimmerLoading(
+                child: Icon(Icons.rocket_launch, size: 80, color: Colors.white),
+              ),
+              SizedBox(height: 24),
+              Text(
+                'Loading Dynamic App...',
+                style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 16),
+              CircularProgressIndicator(color: Colors.white),
+              SizedBox(height: 16),
+              Text(
+                'Syncing with MongoDB...',
+                style: TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Connection Error'),
+        backgroundColor: Colors.red,
+        foregroundColor: Colors.white,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 80, color: Colors.red),
+              const SizedBox(height: 24),
+              const Text(
+                'Failed to connect to server',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _error,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _error = '';
+                    _isInitialized = false;
+                  });
+                  _initializeApp();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dynamic Home Page that renders widgets based on real-time data
+class DynamicHomePage extends StatefulWidget {
+  final Map<String, dynamic> config;
+  final List<dynamic> widgets;
+  final VoidCallback onRefresh;
+
+  const DynamicHomePage({
+    Key? key,
+    required this.config,
+    required this.widgets,
+    required this.onRefresh,
+  }) : super(key: key);
+
+  @override
+  State<DynamicHomePage> createState() => _DynamicHomePageState();
+}
+
+class _DynamicHomePageState extends State<DynamicHomePage> {
+  final CartManager _cartManager = CartManager();
+  bool _isRefreshing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final shopName = widget.config['shopName'] ?? 'My Shop';
+    final productCards = widget.config['productCards'] ?? [];
+    
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            const Icon(Icons.store, size: 24),
+            const SizedBox(width: 8),
+            Text(shopName),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.wifi, size: 12, color: Colors.white),
+                  SizedBox(width: 4),
+                  Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: _handleRefresh,
+            icon: _isRefreshing 
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        child: _buildBody(productCards),
+      ),
+    );
+  }
+
+  Widget _buildBody(List<dynamic> productCards) {
+    if (productCards.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [Colors.blue, Colors.purple]),
+            ),
+            child: Column(
+              children: [
+                const Text(
+                  '🚀 Real-time Sync Active',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Changes in MongoDB reflect instantly!',
+                  style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.75,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: productCards.length,
+              itemBuilder: (context, index) {
+                final product = productCards[index];
+                return _buildProductCard(product);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductCard(Map<String, dynamic> product) {
+    final productName = product['name'] ?? 'Product';
+    final price = product['price']?.toString() ?? '0';
+    final image = product['image'];
+    
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                color: Colors.grey[200],
+              ),
+              child: image != null
+                ? ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    child: Image.network(
+                      image,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Center(child: Icon(Icons.image, size: 40, color: Colors.grey));
+                      },
+                    ),
+                  )
+                : const Center(child: Icon(Icons.image, size: 40, color: Colors.grey)),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    productName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$0',
+                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const Spacer(),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Product added to cart!'), 
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('Add to Cart'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ShimmerLoading(
+            isLoading: false,
+            child: const Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'No products available',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Add products in the admin panel
+and they will appear here instantly!',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: _handleRefresh,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Refresh'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleRefresh() async {
+    if (_isRefreshing) return;
+    
+    setState(() => _isRefreshing = true);
+    
+    try {
+      widget.onRefresh();
+      await Future.delayed(const Duration(seconds: 1));
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
+  }
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -252,68 +686,12 @@ class _HomePageState extends State<HomePage> {
   final WishlistManager _wishlistManager = WishlistManager();
   String _searchQuery = '';
   List<Map<String, dynamic>> _filteredProducts = [];
-  
-  // Dynamic product list - will be populated from API
-  List<Map<String, dynamic>> productCards = [];
-  bool _isLoading = true;
-  Map<String, dynamic> _currentStoreInfo = storeInfo;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-    _loadData(); // Fetch data from API on app start
-  }
-  
-  // Load data dynamically from backend API
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    
-    try {
-      // Fetch latest products from API
-      final apiProducts = await ApiService.fetchProducts();
-      
-      if (apiProducts.isNotEmpty) {
-        // Use API data if available
-        setState(() {
-          productCards = apiProducts;
-          _filteredProducts = List.from(productCards);
-          _isLoading = false;
-        });
-        print('✅ Loaded \${apiProducts.length} products from API');
-      } else {
-        // Fallback to initial data if API returns empty
-        setState(() {
-          productCards = List.from(_initialProductCards);
-          _filteredProducts = List.from(productCards);
-          _isLoading = false;
-        });
-        print('⚠️ Using initial data (API returned empty)');
-      }
-      
-      // Fetch app configuration
-      final config = await ApiService.fetchAppConfig();
-      if (config != null) {
-        setState(() {
-          _currentStoreInfo = config['storeInfo'] ?? storeInfo;
-        });
-        print('✅ App config updated from API');
-      }
-    } catch (e) {
-      // Fallback to initial data on error
-      setState(() {
-        productCards = List.from(_initialProductCards);
-        _filteredProducts = List.from(productCards);
-        _isLoading = false;
-      });
-      print('⚠️ Error loading data, using initial data: \$e');
-    }
-  }
-  
-  // Refresh data when user pulls down
-  Future<void> _refreshData() async {
-    print('🔄 Refreshing data from API...');
-    await _loadData();
+    _filteredProducts = List.from(productCards);
   }
 
   @override
@@ -376,20 +754,6 @@ class _HomePageState extends State<HomePage> {
   );
 
   Widget _buildHomePage() {
-    // Show loading indicator while fetching data from API
-    if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading latest data...', style: TextStyle(fontSize: 16, color: Colors.grey)),
-          ],
-        ),
-      );
-    }
-    
     return Column(
       children: [
                   Container(
@@ -400,7 +764,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'ediott',
+                          'jeeva ',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -471,99 +835,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _refreshData,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                children: [
-                  Container(
-                    height: 160,
-                    child: Stack(
-                      children: [
-                        Container(color: Color(0xFFBDBDBD)),
-                        Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Bunny Shop',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  shadows: [
-                                    Shadow(
-                                      blurRadius: 4.0,
-                                      color: Colors.black,
-                                      offset: Offset(1.0, 1.0),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              ElevatedButton(
-                                onPressed: () {},
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                ),
-                                child: Text('Grill
-', style: const TextStyle(fontSize: 12)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        CarouselSlider(
-                          options: CarouselOptions(
-                            height: 200,
-                            autoPlay: true,
-                            autoPlayInterval: Duration(seconds: 3),
-                            autoPlayAnimationDuration: const Duration(milliseconds: 800),
-                            autoPlayCurve: Curves.fastOutSlowIn,
-                            enlargeCenterPage: true,
-                            scrollDirection: Axis.horizontal,
-                            enableInfiniteScroll: true,
-                            viewportFraction: 0.8,
-                            enlargeFactor: 0.3,
-                          ),
-                          items: [
-                            Builder(
-                              builder: (BuildContext context) => Container(
-                                width: 300,
-                                margin: const EdgeInsets.symmetric(horizontal: 5.0),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[300],
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Center(
-                                  child: Icon(Icons.image, size: 40, color: Colors.grey),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                                                const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(width: 6.0, height: 6.0, margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0), decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.blue.withOpacity(0.4))),
-                          ],
-                        ),
-                        
-                      ],
-                    ),
-                  ),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
                   Container(
                     padding: const EdgeInsets.all(12),
                     color: Color(0xFFFFFFFF),
@@ -794,84 +1068,7 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    child: Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade200,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: const Icon(Icons.store, size: 24),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    'anandhu',
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                const Icon(Icons.location_on, color: Colors.blue),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text('123 street', style: TextStyle(fontSize: 12))),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(Icons.email, color: Colors.blue),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text('jeeva@example.com', style: TextStyle(fontSize: 12))),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(Icons.phone, color: Colors.blue),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text('9361266129', style: TextStyle(fontSize: 12))),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            const Divider(),
-                            const SizedBox(height: 12),
-                            Center(
-                              child: Text(
-                                'Â© 2023 My Store. All rights reserved.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
