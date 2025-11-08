@@ -246,12 +246,81 @@ class _HomePageState extends State<HomePage> {
   final WishlistManager _wishlistManager = WishlistManager();
   String _searchQuery = '';
   List<Map<String, dynamic>> _filteredProducts = [];
+  bool _isRefreshing = false;
+  DateTime? _lastSyncTime;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
     _filteredProducts = List.from(productCards);
+  }
+  
+  Future<void> _refreshData() async {
+    if (_isRefreshing) return;
+    
+    setState(() => _isRefreshing = true);
+    
+    try {
+      // Call refresh API endpoint
+      final response = await http.post(
+        Uri.parse('${Environment.apiBase}/api/refresh-data/YOUR_ADMIN_ID'),
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          // Update product cards from dynamicFields
+          final refreshedProducts = data['data']['dynamicFields']['productCards'] as List?;
+          if (refreshedProducts != null) {
+            setState(() {
+              productCards.clear();
+              productCards.addAll(List<Map<String, dynamic>>.from(refreshedProducts));
+              _filteredProducts = List.from(productCards);
+              _lastSyncTime = DateTime.now();
+            });
+            
+            // Show success message
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: Colors.white),
+                      const SizedBox(width: 12),
+                      Text('Refreshed successfully! ✅'),
+                    ],
+                  ),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Refresh error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Text('Refresh failed. Please try again.'),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
   }
 
   @override
@@ -324,7 +393,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'anandh',
+                          'anandhan',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -430,13 +499,291 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
         Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                // Add other scrollable widgets
-                for (int i = 0; i < otherWidgets.length; i++)
-                  _generateWidgetCode(otherWidgets[i], i),
-              ],
+          child: RefreshIndicator(
+            onRefresh: _refreshData,
+            color: Colors.blue,
+            backgroundColor: Colors.white,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    color: Color(0xFFFFFFFF),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        
+                        const SizedBox(height: 8),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 0.75,
+                          ),
+                          itemCount:                           _searchQuery.isEmpty 
+                              ? productCards.length 
+                              : productCards.where((product) {
+                                  final productName = (product['productName'] ?? '').toString().toLowerCase();
+                                  final price = (product['price'] ?? '').toString().toLowerCase();
+                                  final discountPrice = (product['discountPrice'] ?? '').toString().toLowerCase();
+                                  return productName.contains(_searchQuery) || price.contains(_searchQuery) || discountPrice.contains(_searchQuery);
+                                }).length,
+                          itemBuilder: (context, index) {
+                            final filteredProducts =                             _searchQuery.isEmpty 
+                                ? productCards 
+                                : productCards.where((product) {
+                                    final productName = (product['productName'] ?? '').toString().toLowerCase();
+                                    final price = (product['price'] ?? '').toString().toLowerCase();
+                                    final discountPrice = (product['discountPrice'] ?? '').toString().toLowerCase();
+                                    return productName.contains(_searchQuery) || price.contains(_searchQuery) || discountPrice.contains(_searchQuery);
+                                  }).toList();
+                            if (index >= filteredProducts.length) return const SizedBox();
+                            final product = filteredProducts[index];
+                            final productId = 'product_$index';
+                            final isInWishlist = _wishlistManager.isInWishlist(productId);
+                            return Card(
+                              elevation: 3,
+                              color: Color(0xFFFFFFFF),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    flex: 3,
+                                    child: Stack(
+                                      children: [
+                                        Container(
+                                          width: double.infinity,
+                                          decoration: BoxDecoration(
+                                            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                                          ),
+                                          child:                                           product['imageAsset'] != null
+                                              ? (product['imageAsset'] != null && product['imageAsset'].isNotEmpty
+                                              ? (product['imageAsset'].startsWith('data:image/')
+                                                  ? Image.memory(
+                                                      base64Decode(product['imageAsset'].split(',')[1]),
+                                                      width: double.infinity,
+                                                      height: double.infinity,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder: (context, error, stackTrace) => Container(
+                                                        color: Colors.grey[300],
+                                                        child: const Icon(Icons.image, size: 40, color: Colors.grey),
+                                                      ),
+                                                    )
+                                                  : Image.network(
+                                                      product['imageAsset'],
+                                                      width: double.infinity,
+                                                      height: double.infinity,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder: (context, error, stackTrace) => Container(
+                                                        color: Colors.grey[300],
+                                                        child: const Icon(Icons.image, size: 40, color: Colors.grey),
+                                                      ),
+                                                    ))
+                                              : Container(
+                                                  color: Colors.grey[300],
+                                                  child: const Icon(Icons.image, size: 40, color: Colors.grey),
+                                                ))
+                                              : Container(
+                                            color: Colors.grey[300],
+                                            child: const Icon(Icons.image, size: 40),
+                                          )
+                                          ,
+                                        ),
+                                        Positioned(
+                                          top: 8,
+                                          right: 8,
+                                          child: IconButton(
+                                            onPressed: () {
+                                              if (isInWishlist) {
+                                                _wishlistManager.removeItem(productId);
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Removed from wishlist')),
+                                                );
+                                              } else {
+                                                final wishlistItem = WishlistItem(
+                                                  id: productId,
+                                                  name: product['productName'] ?? 'Product',
+                                                  price: double.tryParse(product['price']?.replaceAll('\$','') ?? '0') ?? 0.0,
+                                                  discountPrice: product['discountPrice'] != null && product['discountPrice'].isNotEmpty
+                                                      ? double.tryParse(product['discountPrice'].replaceAll('\$','') ?? '0') ?? 0.0
+                                                      : 0.0,
+                                                  image: product['imageAsset'],
+                                                );
+                                                _wishlistManager.addItem(wishlistItem);
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Added to wishlist')),
+                                                );
+                                              }
+                                            },
+                                            icon: Icon(
+                                              isInWishlist ? Icons.favorite : Icons.favorite_border,
+                                              color: isInWishlist ? Colors.red : Colors.grey,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            product['productName'] ?? 'Product Name',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              // Current/Final Price (always without strikethrough)
+                                              Text(
+                                                                                                product['price'] ?? '$0'
+                                                ,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.blue,
+                                                ),
+                                              ),
+                                              // Original Price (if discount exists)
+                                                                                            if (product['discountPrice'] != null && product['discountPrice'].toString().isNotEmpty)
+                                                Text(
+                                                  product['discountPrice'] ?? '',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    decoration: TextDecoration.lineThrough,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                ),
+                                              
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            children: [
+                                              Icon(Icons.star, color: Colors.amber, size: 14),
+                                              Icon(Icons.star, color: Colors.amber, size: 14),
+                                              Icon(Icons.star, color: Colors.amber, size: 14),
+                                              Icon(Icons.star, color: Colors.amber, size: 14),
+                                              Icon(Icons.star_border, color: Colors.amber, size: 14),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                product['rating'] ?? '4.0',
+                                                style: const TextStyle(fontSize: 12),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton(
+                                              onPressed: () {
+                                                final cartItem = CartItem(
+                                                  id: productId,
+                                                  name: product['productName'] ?? 'Product',
+                                                  price: PriceUtils.parsePrice(product['price'] ?? '0'),
+                                                  discountPrice:                                                   product['discountPrice'] != null && product['discountPrice'].toString().isNotEmpty
+                                                      ? PriceUtils.parsePrice(product['discountPrice'])
+                                                      : 0.0
+                                                  ,
+                                                  image: product['imageAsset'],
+                                                );
+                                                _cartManager.addItem(cartItem);
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Added to cart')),
+                                                );
+                                              },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.blue,
+                                                foregroundColor: Colors.white,
+                                                elevation: 0,
+                                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  
+                                                ),
+                                              ),
+                                              child: const Text(
+                                                'Add to Cart',
+                                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CarouselSlider(
+                          options: CarouselOptions(
+                            height: 200,
+                            autoPlay: true,
+                            autoPlayInterval: Duration(seconds: 3),
+                            autoPlayAnimationDuration: const Duration(milliseconds: 800),
+                            autoPlayCurve: Curves.fastOutSlowIn,
+                            enlargeCenterPage: true,
+                            scrollDirection: Axis.horizontal,
+                            enableInfiniteScroll: true,
+                            viewportFraction: 0.8,
+                            enlargeFactor: 0.3,
+                          ),
+                          items: [
+                            Builder(
+                              builder: (BuildContext context) => Container(
+                                width: 300,
+                                margin: const EdgeInsets.symmetric(horizontal: 5.0),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[300],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.image, size: 40, color: Colors.grey),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                                                const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(width: 6.0, height: 6.0, margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0), decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.blue.withOpacity(0.4))),
+                          ],
+                        ),
+                        
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
