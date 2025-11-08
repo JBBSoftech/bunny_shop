@@ -393,7 +393,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'anandhan anandhan',
+                          'jeevaaa',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -472,7 +472,7 @@ class _HomePageState extends State<HomePage> {
                             _filterProducts(value);
                           },
                           decoration: InputDecoration(
-                            hintText: 'Search',
+                            hintText: 'Search names and prices',
                             prefixIcon: const Icon(Icons.search),
                             suffixIcon: const Icon(Icons.filter_list),
                             border: OutlineInputBorder(
