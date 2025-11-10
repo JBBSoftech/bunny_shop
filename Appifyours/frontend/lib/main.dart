@@ -241,19 +241,52 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  String _appName = 'Loading...';
+  final String _adminObjectId = 'YOUR_ADMIN_OBJECT_ID'; // Replace with actual ObjectId
+
   @override
   void initState() {
     super.initState();
-    _navigateToSignIn();
+    _fetchAppNameAndNavigate();
   }
 
-  Future<void> _navigateToSignIn() async {
-    await Future.delayed(const Duration(seconds: 3));
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const SignInPage()),
-      );
+  Future<void> _fetchAppNameAndNavigate() async {
+    try {
+      // TODO: Replace with your actual backend URL
+      // final response = await http.get(
+      //   Uri.parse('http://your-backend-url/api/admin-element-screen/$_adminObjectId'),
+      // );
+      // if (response.statusCode == 200) {
+      //   final data = json.decode(response.body);
+      //   setState(() {
+      //     _appName = data['data']['appName'] ?? 'AppifyYours';
+      //   });
+      // }
+      
+      // For now, using default name
+      setState(() {
+        _appName = 'AppifyYours';
+      });
+      
+      await Future.delayed(const Duration(seconds: 3));
+      
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => SignInPage(adminObjectId: _adminObjectId)),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _appName = 'AppifyYours';
+      });
+      await Future.delayed(const Duration(seconds: 3));
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => SignInPage(adminObjectId: _adminObjectId)),
+        );
+      }
     }
   }
 
@@ -279,9 +312,9 @@ class _SplashScreenState extends State<SplashScreen> {
                 color: Colors.white,
               ),
               const SizedBox(height: 24),
-              const Text(
-                'AppifyYours',
-                style: TextStyle(
+              Text(
+                _appName,
+                style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
@@ -308,27 +341,36 @@ class _SplashScreenState extends State<SplashScreen> {
 
 // Sign In Page - Second screen
 class SignInPage extends StatefulWidget {
-  const SignInPage({super.key});
+  final String adminObjectId;
+  
+  const SignInPage({super.key, required this.adminObjectId});
 
   @override
   State<SignInPage> createState() => _SignInPageState();
 }
 
 class _SignInPageState extends State<SignInPage> {
-  final _emailController = TextEditingController();
+  final _emailOrPhoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _emailOrPhoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  bool _isEmail(String input) {
+    return input.contains('@');
+  }
+
   Future<void> _signIn() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    final emailOrPhone = _emailOrPhoneController.text.trim();
+    final password = _passwordController.text;
+
+    if (emailOrPhone.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields')),
       );
@@ -337,15 +379,44 @@ class _SignInPageState extends State<SignInPage> {
 
     setState(() => _isLoading = true);
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      // TODO: Replace with your actual backend URL
+      // final response = await http.post(
+      //   Uri.parse('http://your-backend-url/api/users/sign-in'),
+      //   headers: {'Content-Type': 'application/json'},
+      //   body: json.encode({
+      //     'email': _isEmail(emailOrPhone) ? emailOrPhone : null,
+      //     'phone': !_isEmail(emailOrPhone) ? emailOrPhone : null,
+      //     'password': password,
+      //     'adminObjectId': widget.adminObjectId,
+      //   }),
+      // );
+      // 
+      // if (response.statusCode == 200) {
+      //   final data = json.decode(response.body);
+      //   // Save user data locally
+      //   // Navigate to home page
+      // } else {
+      //   throw Exception('Invalid credentials');
+      // }
 
-    if (mounted) {
+      // Simulate API call
+      await Future.delayed(const Duration(seconds: 1));
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => HomePage(adminObjectId: widget.adminObjectId)),
+        );
+      }
+    } catch (e) {
       setState(() => _isLoading = false);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sign in failed: ${e.toString()}')),
+        );
+      }
     }
   }
 
@@ -384,12 +455,13 @@ class _SignInPageState extends State<SignInPage> {
               ),
               const SizedBox(height: 48),
               TextField(
-                controller: _emailController,
+                controller: _emailOrPhoneController,
                 decoration: const InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(Icons.email),
+                  labelText: 'Email or Phone Number',
+                  prefixIcon: Icon(Icons.person),
+                  hintText: 'Enter email or phone',
                 ),
-                keyboardType: TextInputType.emailAddress,
+                keyboardType: TextInputType.text,
               ),
               const SizedBox(height: 16),
               TextField(
@@ -428,7 +500,9 @@ class _SignInPageState extends State<SignInPage> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const CreateAccountPage()),
+                    MaterialPageRoute(
+                      builder: (context) => CreateAccountPage(adminObjectId: widget.adminObjectId),
+                    ),
                   );
                 },
                 child: const Text('Create Your Account'),
@@ -443,7 +517,9 @@ class _SignInPageState extends State<SignInPage> {
 
 // Create Account Page - Third screen
 class CreateAccountPage extends StatefulWidget {
-  const CreateAccountPage({super.key});
+  final String adminObjectId;
+  
+  const CreateAccountPage({super.key, required this.adminObjectId});
 
   @override
   State<CreateAccountPage> createState() => _CreateAccountPageState();
@@ -466,28 +542,98 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     super.dispose();
   }
 
+  bool _validateEmail(String email) {
+    return RegExp(r'^[w-.]+@([w-]+.)+[w-]{2,4}$').hasMatch(email);
+  }
+
+  bool _validatePhone(String phone) {
+    return RegExp(r'^[0-9]{10}$').hasMatch(phone);
+  }
+
+  bool _validatePassword(String password) {
+    return password.length >= 6;
+  }
+
   Future<void> _createAccount() async {
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _phoneController.text.isEmpty ||
-        _passwordController.text.isEmpty) {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+    final password = _passwordController.text;
+
+    // Validation
+    if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields')),
       );
       return;
     }
 
+    if (!_validateEmail(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid email')),
+      );
+      return;
+    }
+
+    if (!_validatePhone(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid 10-digit phone number')),
+      );
+      return;
+    }
+
+    if (!_validatePassword(password)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 6 characters')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      // TODO: Replace with your actual backend URL
+      // final response = await http.post(
+      //   Uri.parse('http://your-backend-url/api/users/create-account'),
+      //   headers: {'Content-Type': 'application/json'},
+      //   body: json.encode({
+      //     'name': name,
+      //     'email': email,
+      //     'phone': phone,
+      //     'password': password,
+      //     'adminObjectId': widget.adminObjectId,
+      //     'countryCode': '+91',
+      //   }),
+      // );
+      // 
+      // if (response.statusCode == 201) {
+      //   final data = json.decode(response.body);
+      //   // Account created successfully
+      // } else {
+      //   final error = json.decode(response.body)['error'];
+      //   throw Exception(error ?? 'Failed to create account');
+      // }
 
-    if (mounted) {
+      // Simulate API call
+      await Future.delayed(const Duration(seconds: 1));
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created successfully!')),
-      );
-      Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create account: ${e.toString()}')),
+        );
+      }
     }
   }
 
@@ -588,7 +734,9 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String adminObjectId;
+  
+  const HomePage({super.key, required this.adminObjectId});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -679,7 +827,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'jeeva anandhan',
+                          'Anandh',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -1386,17 +1534,24 @@ class _HomePageState extends State<HomePage> {
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(250, 50),
-                      side: const BorderSide(color: Colors.grey),
+                      side: const BorderSide(color: Colors.red),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     onPressed: () {
-                      // Log Out button action
+                      // Log out and navigate to sign in page
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SignInPage(adminObjectId: 'YOUR_ADMIN_OBJECT_ID'),
+                        ),
+                        (route) => false,
+                      );
                     },
                     child: const Text(
                       'Log Out',
-                      style: TextStyle(fontSize: 18, color: Colors.black),
+                      style: TextStyle(fontSize: 18, color: Colors.red, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
