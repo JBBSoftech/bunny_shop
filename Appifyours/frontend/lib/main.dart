@@ -827,7 +827,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'jeeva anandhann',
+                          'jeeva',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -1544,7 +1544,7 @@ class _HomePageState extends State<HomePage> {
                       Navigator.pushAndRemoveUntil(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => SignInPage(adminObjectId: '690dc087abc99370793b9150'),
+                          builder: (context) => const SignInPage(),
                         ),
                         (route) => false,
                       );
