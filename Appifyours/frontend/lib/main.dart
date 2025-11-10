@@ -242,7 +242,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   String _appName = 'Loading...';
-  final String _adminObjectId = 'YOUR_ADMIN_OBJECT_ID'; // Replace with actual ObjectId
+  final String _adminObjectId = 'ADMIN_OBJECT_ID_PLACEHOLDER'; // This will be replaced during code generation
 
   @override
   void initState() {
@@ -252,41 +252,34 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _fetchAppNameAndNavigate() async {
     try {
-      // TODO: Replace with your actual backend URL
-      // final response = await http.get(
-      //   Uri.parse('http://your-backend-url/api/admin-element-screen/$_adminObjectId'),
-      // );
-      // if (response.statusCode == 200) {
-      //   final data = json.decode(response.body);
-      //   setState(() {
-      //     _appName = data['data']['appName'] ?? 'AppifyYours';
-      //   });
-      // }
+      final response = await http.get(
+        Uri.parse('http://localhost:5000/api/admin-element-screen/$_adminObjectId/shop-name'),
+      );
       
-      // For now, using default name
-      setState(() {
-        _appName = 'AppifyYours';
-      });
-      
-      await Future.delayed(const Duration(seconds: 3));
-      
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => SignInPage(adminObjectId: _adminObjectId)),
-        );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (mounted) {
+          setState(() {
+            _appName = data['shopName'] ?? 'AppifyYours';
+          });
+        }
       }
     } catch (e) {
-      setState(() {
-        _appName = 'AppifyYours';
-      });
-      await Future.delayed(const Duration(seconds: 3));
+      print('Error fetching shop name: $e');
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => SignInPage(adminObjectId: _adminObjectId)),
-        );
+        setState(() {
+          _appName = 'AppifyYours';
+        });
       }
+    }
+    
+    await Future.delayed(const Duration(seconds: 3));
+    
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => SignInPage(adminObjectId: _adminObjectId)),
+      );
     }
   }
 
@@ -380,41 +373,43 @@ class _SignInPageState extends State<SignInPage> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Replace with your actual backend URL
-      // final response = await http.post(
-      //   Uri.parse('http://your-backend-url/api/users/sign-in'),
-      //   headers: {'Content-Type': 'application/json'},
-      //   body: json.encode({
-      //     'email': _isEmail(emailOrPhone) ? emailOrPhone : null,
-      //     'phone': !_isEmail(emailOrPhone) ? emailOrPhone : null,
-      //     'password': password,
-      //     'adminObjectId': widget.adminObjectId,
-      //   }),
-      // );
-      // 
-      // if (response.statusCode == 200) {
-      //   final data = json.decode(response.body);
-      //   // Save user data locally
-      //   // Navigate to home page
-      // } else {
-      //   throw Exception('Invalid credentials');
-      // }
-
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomePage(adminObjectId: widget.adminObjectId)),
-        );
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/api/users/sign-in'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': _isEmail(emailOrPhone) ? emailOrPhone : null,
+          'phone': !_isEmail(emailOrPhone) ? emailOrPhone : null,
+          'password': password,
+          'adminObjectId': widget.adminObjectId,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          // Sign in successful
+          if (mounted) {
+            setState(() => _isLoading = false);
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => HomePage(adminObjectId: widget.adminObjectId)),
+            );
+          }
+        } else {
+          throw Exception(data['error'] ?? 'Sign in failed');
+        }
+      } else {
+        final error = json.decode(response.body);
+        throw Exception(error['error'] ?? 'Invalid credentials');
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sign in failed: ${e.toString()}')),
+          SnackBar(
+            content: Text('Sign in failed: ${e.toString().replaceAll("Exception: ", "")}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -526,7 +521,8 @@ class CreateAccountPage extends StatefulWidget {
 }
 
 class _CreateAccountPageState extends State<CreateAccountPage> {
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -535,7 +531,8 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
@@ -555,13 +552,14 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   }
 
   Future<void> _createAccount() async {
-    final name = _nameController.text.trim();
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
     final email = _emailController.text.trim();
     final phone = _phoneController.text.trim();
     final password = _passwordController.text;
 
     // Validation
-    if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty) {
+    if (firstName.isEmpty || lastName.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields')),
       );
@@ -592,46 +590,49 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Replace with your actual backend URL
-      // final response = await http.post(
-      //   Uri.parse('http://your-backend-url/api/users/create-account'),
-      //   headers: {'Content-Type': 'application/json'},
-      //   body: json.encode({
-      //     'name': name,
-      //     'email': email,
-      //     'phone': phone,
-      //     'password': password,
-      //     'adminObjectId': widget.adminObjectId,
-      //     'countryCode': '+91',
-      //   }),
-      // );
-      // 
-      // if (response.statusCode == 201) {
-      //   final data = json.decode(response.body);
-      //   // Account created successfully
-      // } else {
-      //   final error = json.decode(response.body)['error'];
-      //   throw Exception(error ?? 'Failed to create account');
-      // }
-
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account created successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/api/users/create-account'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'firstName': firstName,
+          'lastName': lastName,
+          'email': email,
+          'phone': phone,
+          'password': password,
+          'adminObjectId': widget.adminObjectId,
+          'countryCode': '+91',
+        }),
+      );
+      
+      if (response.statusCode == 201) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          // Account created successfully
+          if (mounted) {
+            setState(() => _isLoading = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Account created successfully! Please sign in.'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            Navigator.pop(context);
+          }
+        } else {
+          throw Exception(data['error'] ?? 'Failed to create account');
+        }
+      } else {
+        final error = json.decode(response.body);
+        throw Exception(error['error'] ?? 'Failed to create account');
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create account: ${e.toString()}')),
+          SnackBar(
+            content: Text('Failed: ${e.toString().replaceAll("Exception: ", "")}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -669,20 +670,21 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
               ),
               const SizedBox(height: 32),
               TextField(
-                controller: _nameController,
+                controller: _firstNameController,
                 decoration: const InputDecoration(
-                  labelText: 'Full Name',
+                  labelText: 'First Name',
                   prefixIcon: Icon(Icons.person),
                 ),
+                textCapitalization: TextCapitalization.words,
               ),
               const SizedBox(height: 16),
               TextField(
-                controller: _emailController,
+                controller: _lastNameController,
                 decoration: const InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(Icons.email),
+                  labelText: 'Last Name',
+                  prefixIcon: Icon(Icons.person_outline),
                 ),
-                keyboardType: TextInputType.emailAddress,
+                textCapitalization: TextCapitalization.words,
               ),
               const SizedBox(height: 16),
               TextField(
@@ -690,8 +692,19 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                 decoration: const InputDecoration(
                   labelText: 'Phone Number',
                   prefixIcon: Icon(Icons.phone),
+                  hintText: '10 digit number',
                 ),
                 keyboardType: TextInputType.phone,
+                maxLength: 10,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Email ID',
+                  prefixIcon: Icon(Icons.email),
+                ),
+                keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
               TextField(
@@ -827,7 +840,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'Anandh',
+                          'Anandh anandh',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
