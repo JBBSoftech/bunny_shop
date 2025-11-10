@@ -232,6 +232,12 @@ class MyApp extends StatelessWidget {
   );
 }
 
+// API Configuration
+class ApiConfig {
+  static const String baseUrl = 'http://localhost:5000';
+  static const String adminObjectId = '690dc087abc99370793b9150';
+}
+
 // Splash Screen - First screen
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -242,7 +248,6 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   String _appName = 'Loading...';
-  final String _adminObjectId = '690dc087abc99370793b9150';
 
   @override
   void initState() {
@@ -253,7 +258,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _fetchAppNameAndNavigate() async {
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/admin-element-screen/$_adminObjectId/shop-name'),
+        Uri.parse('${ApiConfig.baseUrl}/api/admin-element-screen/${ApiConfig.adminObjectId}/shop-name'),
       );
       
       if (response.statusCode == 200) {
@@ -265,7 +270,7 @@ class _SplashScreenState extends State<SplashScreen> {
         }
       }
     } catch (e) {
-      print('Error fetching shop name: $e');
+      print('Error fetching shop name: \$e');
       if (mounted) {
         setState(() {
           _appName = 'AppifyYours';
@@ -278,7 +283,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => SignInPage(adminObjectId: _adminObjectId)),
+        MaterialPageRoute(builder: (context) => const SignInPage()),
       );
     }
   }
@@ -332,11 +337,9 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-// Sign In Page - Second screen
+// Sign In Page
 class SignInPage extends StatefulWidget {
-  final String adminObjectId;
-  
-  const SignInPage({super.key, required this.adminObjectId});
+  const SignInPage({super.key});
 
   @override
   State<SignInPage> createState() => _SignInPageState();
@@ -367,12 +370,12 @@ class _SignInPageState extends State<SignInPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/users/sign-in'),
+        Uri.parse('${ApiConfig.baseUrl}/api/users/sign-in'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': _emailController.text.trim(),
           'password': _passwordController.text,
-          'adminObjectId': widget.adminObjectId,
+          'adminObjectId': ApiConfig.adminObjectId,
         }),
       );
       
@@ -383,7 +386,7 @@ class _SignInPageState extends State<SignInPage> {
             setState(() => _isLoading = false);
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => HomePage(adminObjectId: widget.adminObjectId)),
+              MaterialPageRoute(builder: (context) => const HomePage()),
             );
           }
         } else {
@@ -398,7 +401,7 @@ class _SignInPageState extends State<SignInPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Sign in failed: ${e.toString().replaceAll("Exception: ", "")}'),
+            content: Text('Sign in failed: \${e.toString().replaceAll("Exception: ", "")}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -486,7 +489,7 @@ class _SignInPageState extends State<SignInPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => CreateAccountPage(adminObjectId: widget.adminObjectId),
+                      builder: (context) => const CreateAccountPage(),
                     ),
                   );
                 },
@@ -500,11 +503,9 @@ class _SignInPageState extends State<SignInPage> {
   }
 }
 
-// Create Account Page - Third screen
+// Create Account Page
 class CreateAccountPage extends StatefulWidget {
-  final String adminObjectId;
-  
-  const CreateAccountPage({super.key, required this.adminObjectId});
+  const CreateAccountPage({super.key});
 
   @override
   State<CreateAccountPage> createState() => _CreateAccountPageState();
@@ -580,7 +581,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/users/create-account'),
+        Uri.parse('${ApiConfig.baseUrl}/api/users/create-account'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'firstName': firstName,
@@ -588,7 +589,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           'email': email,
           'phone': phone,
           'password': password,
-          'adminObjectId': widget.adminObjectId,
+          'adminObjectId': ApiConfig.adminObjectId,
           'countryCode': '+91',
         }),
       );
@@ -618,7 +619,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed: ${e.toString().replaceAll("Exception: ", "")}'),
+            content: Text('Failed: \${e.toString().replaceAll("Exception: ", "")}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -735,9 +736,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 }
 
 class HomePage extends StatefulWidget {
-  final String adminObjectId;
-  
-  const HomePage({super.key, required this.adminObjectId});
+  const HomePage({super.key});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -828,7 +827,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'jeeva anandhan',
+                          'jeeva anandhann',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
