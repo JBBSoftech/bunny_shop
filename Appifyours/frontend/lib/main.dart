@@ -828,7 +828,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'Priya',
+                          'jeeva',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
