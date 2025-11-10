@@ -246,81 +246,12 @@ class _HomePageState extends State<HomePage> {
   final WishlistManager _wishlistManager = WishlistManager();
   String _searchQuery = '';
   List<Map<String, dynamic>> _filteredProducts = [];
-  bool _isRefreshing = false;
-  DateTime? _lastSyncTime;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
     _filteredProducts = List.from(productCards);
-  }
-  
-  Future<void> _refreshData() async {
-    if (_isRefreshing) return;
-    
-    setState(() => _isRefreshing = true);
-    
-    try {
-      // Call refresh API endpoint
-      final response = await http.post(
-        Uri.parse('${Environment.apiBase}/api/refresh-data/YOUR_ADMIN_ID'),
-      );
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          // Update product cards from dynamicFields
-          final refreshedProducts = data['data']['dynamicFields']['productCards'] as List?;
-          if (refreshedProducts != null) {
-            setState(() {
-              productCards.clear();
-              productCards.addAll(List<Map<String, dynamic>>.from(refreshedProducts));
-              _filteredProducts = List.from(productCards);
-              _lastSyncTime = DateTime.now();
-            });
-            
-            // Show success message
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const Icon(Icons.check_circle, color: Colors.white),
-                      const SizedBox(width: 12),
-                      Text('Refreshed successfully! ✅'),
-                    ],
-                  ),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            }
-          }
-        }
-      }
-    } catch (e) {
-      print('Refresh error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                Text('Refresh failed. Please try again.'),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isRefreshing = false);
-      }
-    }
   }
 
   @override
@@ -393,7 +324,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'jeevaaa',
+                          'jeeva anandhan ',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -499,14 +430,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _refreshData,
-            color: Colors.blue,
-            backgroundColor: Colors.white,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                children: [
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
                   Container(
                     padding: const EdgeInsets.all(12),
                     color: Color(0xFFFFFFFF),
@@ -782,8 +708,7 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
