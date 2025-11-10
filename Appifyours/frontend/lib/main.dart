@@ -242,7 +242,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   String _appName = 'Loading...';
-  final String _adminObjectId = 'ADMIN_OBJECT_ID_PLACEHOLDER'; // This will be replaced during code generation
+  final String _adminObjectId = '690dc087abc99370793b9150';
 
   @override
   void initState() {
@@ -343,27 +343,20 @@ class SignInPage extends StatefulWidget {
 }
 
 class _SignInPageState extends State<SignInPage> {
-  final _emailOrPhoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _emailOrPhoneController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  bool _isEmail(String input) {
-    return input.contains('@');
-  }
-
   Future<void> _signIn() async {
-    final emailOrPhone = _emailOrPhoneController.text.trim();
-    final password = _passwordController.text;
-
-    if (emailOrPhone.isEmpty || password.isEmpty) {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields')),
       );
@@ -377,9 +370,8 @@ class _SignInPageState extends State<SignInPage> {
         Uri.parse('http://localhost:5000/api/users/sign-in'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
-          'email': _isEmail(emailOrPhone) ? emailOrPhone : null,
-          'phone': !_isEmail(emailOrPhone) ? emailOrPhone : null,
-          'password': password,
+          'email': _emailController.text.trim(),
+          'password': _passwordController.text,
           'adminObjectId': widget.adminObjectId,
         }),
       );
@@ -387,7 +379,6 @@ class _SignInPageState extends State<SignInPage> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
-          // Sign in successful
           if (mounted) {
             setState(() => _isLoading = false);
             Navigator.pushReplacement(
@@ -450,13 +441,12 @@ class _SignInPageState extends State<SignInPage> {
               ),
               const SizedBox(height: 48),
               TextField(
-                controller: _emailOrPhoneController,
+                controller: _emailController,
                 decoration: const InputDecoration(
-                  labelText: 'Email or Phone Number',
-                  prefixIcon: Icon(Icons.person),
-                  hintText: 'Enter email or phone',
+                  labelText: 'Email',
+                  prefixIcon: Icon(Icons.email),
                 ),
-                keyboardType: TextInputType.text,
+                keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
               TextField(
@@ -558,7 +548,6 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     final phone = _phoneController.text.trim();
     final password = _passwordController.text;
 
-    // Validation
     if (firstName.isEmpty || lastName.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields')),
@@ -607,7 +596,6 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       if (response.statusCode == 201) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
-          // Account created successfully
           if (mounted) {
             setState(() => _isLoading = false);
             ScaffoldMessenger.of(context).showSnackBar(
@@ -840,7 +828,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'Anandh anandh',
+                          'Priya',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -1557,7 +1545,7 @@ class _HomePageState extends State<HomePage> {
                       Navigator.pushAndRemoveUntil(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const SignInPage(adminObjectId: 'YOUR_ADMIN_OBJECT_ID'),
+                          builder: (context) => SignInPage(adminObjectId: '690dc087abc99370793b9150'),
                         ),
                         (route) => false,
                       );
