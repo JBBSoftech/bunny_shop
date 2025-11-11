@@ -825,7 +825,18 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     child: Row(
                       children: [
-                        const Icon(Icons.store, size: 32, color: Colors.white),
+                                                Container(
+                          width: 32,
+                          height: 32,
+                          child: Image.memory(
+                                base64Decode('/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAdAB0DASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD13xn4wtPBOjJql7Z3lzAZRE32VAxTIOGbJAAyAM+pFeU6p+0ai3YGkaE0ltsGTdybH3c54XIx0713fxo/5JLrn/bD/wBHx14RY6HpkvweTV3s0bUP7fW28/Jz5WwHb6YyaAPTdJ/aG0u5ggivdD1E6hI23yrNVkViThQuWBJPHbrXsyncoOCMjOD1r5e17SLDQv2hdN0/TLZLa0i1KwKRJnAyYyevuTX1FQBwXxnBPwl1zAz/AKj/ANHx1862vi+C3+Ha+GTayGYaqt/5wYbdoULtx1zxX2DdWlvfWstrdwRz28q7ZIpVDKw9CD1rm/8AhWvgr/oWtO/79UAfPEniWLxh8cdI1u3tpII7jU7ICJyCw2tGp6f7ua+sa57T/AvhXSr6O9sdBsILmI5jlSIblPqPQ10NAH//2Q=='),
+                                width: 32,
+                                height: 32,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.store, size: 32, color: Colors.white),
+                              ),
+                        ),
+                        
                         const SizedBox(width: 8),
                         Text(
                           'jeeva anandhan',
