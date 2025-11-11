@@ -36,6 +36,10 @@ const adminElementScreenSchema = new mongoose.Schema({
     storeInfo: mongoose.Schema.Types.Mixed,
     orderSummary: mongoose.Schema.Types.Mixed
   },
+  screenConfig: {
+    screenName: String,
+    fields: [mongoose.Schema.Types.Mixed]
+  },
   status: String,
   createdAt: Date,
   updatedAt: Date
@@ -52,6 +56,7 @@ const usersCreateAccountSchema = new mongoose.Schema({
   password: { type: String, required: true },
   phone: { type: String, required: true, trim: true },
   countryCode: { type: String, default: '+91' },
+  fullName: String,
   purchaseHistory: [{ productId: String, productName: String, quantity: Number, price: Number, purchaseDate: Date }],
   wishlist: [{ productId: String, productName: String, productPrice: Number, addedAt: Date }],
   cart: [{ productId: String, productName: String, quantity: Number, price: Number, addedAt: Date }],
@@ -78,6 +83,35 @@ const authenticateToken = (req, res, next) => {
 };
 
 // API Routes
+
+// Get screen configuration dynamically
+app.get('/api/get-screen-config', async (req, res) => {
+  try {
+    const { screen, adminObjectId } = req.query;
+    if (!adminObjectId || !mongoose.Types.ObjectId.isValid(adminObjectId)) {
+      return res.status(400).json({ success: false, error: 'Valid adminObjectId is required' });
+    }
+    const appConfig = await AdminElementScreen.findById(adminObjectId);
+    if (!appConfig) {
+      return res.status(404).json({ success: false, error: 'Screen configuration not found' });
+    }
+    // Return screen config with default fields if not configured
+    const screenConfig = appConfig.screenConfig || {
+      screenName: screen || 'form_screen',
+      fields: [
+        { type: 'text', label: 'First Name', key: 'firstName', required: true },
+        { type: 'text', label: 'Last Name', key: 'lastName', required: true },
+        { type: 'email', label: 'Email', key: 'email', required: true },
+        { type: 'phone', label: 'Phone', key: 'phone', required: true },
+        { type: 'password', label: 'Password', key: 'password', required: true },
+        { type: 'button', label: 'Create Account' }
+      ]
+    };
+    res.json({ success: true, data: screenConfig });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // Get app configuration by adminObjectId (for splash screen and dynamic data)
 app.get('/api/app-config/:adminObjectId', async (req, res) => {
@@ -148,6 +182,46 @@ app.get('/api/products/search/:adminObjectId/:query', async (req, res) => {
   }
 });
 
+// Create user - Dynamic endpoint for form submission
+app.post('/api/create-user', async (req, res) => {
+  try {
+    const { adminObjectId, fullName, firstName, lastName, email, password, phone, countryCode } = req.body;
+    if (!adminObjectId || !email || !password) {
+      return res.status(400).json({ success: false, error: 'adminObjectId, email, and password are required' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(adminObjectId)) {
+      return res.status(400).json({ success: false, error: 'Invalid adminObjectId' });
+    }
+    const existingUser = await UsersCreateAccount.findOne({ 
+      adminObjectId: new mongoose.Types.ObjectId(adminObjectId), 
+      email: email.toLowerCase() 
+    });
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'User already exists with this email' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new UsersCreateAccount({
+      adminObjectId: new mongoose.Types.ObjectId(adminObjectId),
+      firstName: firstName || fullName?.split(' ')[0] || '',
+      lastName: lastName || fullName?.split(' ').slice(1).join(' ') || '',
+      fullName: fullName || `${firstName} ${lastName}`,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      phone: phone || '',
+      countryCode: countryCode || '+91'
+    });
+    await user.save();
+    const token = jwt.sign({ userId: user._id, email: user.email, adminObjectId }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ 
+      success: true, 
+      message: 'User created successfully',
+      data: { userId: user._id, fullName: user.fullName, firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone, token }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // User registration (Create Account)
 app.post('/api/users/register', async (req, res) => {
   try {
@@ -169,6 +243,7 @@ app.post('/api/users/register', async (req, res) => {
     const user = new UsersCreateAccount({
       adminObjectId: new mongoose.Types.ObjectId(adminObjectId),
       firstName, lastName,
+      fullName: `${firstName} ${lastName}`,
       email: email.toLowerCase(),
       password: hashedPassword,
       phone,
