@@ -177,16 +177,29 @@ class WishlistManager extends ChangeNotifier {
 
 
 // Base URL for API calls - Change this to your IP address
-const String baseUrl = 'http://192.168.43.184:5000';
+const String baseUrl = 'http://192.168.224.5:5000';
 
-final List<Map<String, dynamic>> productCards = [
-  {
-    'productName': 'Product ',
-    'imageAsset': null,
-    'price': '299',
-    'discountPrice': '199',
+// Dynamic product data - will be fetched from MongoDB
+List<Map<String, dynamic>> productCards = [];
+bool isLoadingProducts = true;
+
+Future<void> fetchProducts() async {
+  try {
+    final response = await http.get(
+      Uri.parse('\$baseUrl/api/products/\$adminObjectId'),
+    );
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['success'] == true) {
+        productCards = List<Map<String, dynamic>>.from(data['data'] ?? []);
+        isLoadingProducts = false;
+      }
+    }
+  } catch (e) {
+    print('Error fetching products: $e');
+    isLoadingProducts = false;
   }
-];
+}
 
 
 void main() => runApp(const MyApp());
