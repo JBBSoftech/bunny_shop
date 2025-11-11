@@ -10,7 +10,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // MongoDB connection - Connect to main Appifyours database for dynamic data
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://appifyours:appifyours123@cluster0.mongodb.net/appifyours?retryWrites=true&w=majority';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://storedata:Brandmystore0102@3.109.161.66:5555/bms';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
