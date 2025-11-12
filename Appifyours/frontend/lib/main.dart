@@ -234,7 +234,7 @@ class MyApp extends StatelessWidget {
 
 // API Configuration
 class ApiConfig {
-  static const String baseUrl = 'http://localhost:5000';
+  static const String baseUrl = 'http://192.168.1.5:5000';
   static const String adminObjectId = '690dc087abc99370793b9150';
 }
 
@@ -370,12 +370,11 @@ class _SignInPageState extends State<SignInPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/users/sign-in'),
+        Uri.parse('${ApiConfig.baseUrl}/api/user/login'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': _emailController.text.trim(),
           'password': _passwordController.text,
-          'adminObjectId': ApiConfig.adminObjectId,
         }),
       );
       
@@ -581,16 +580,13 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/users/create-account'),
+        Uri.parse('${ApiConfig.baseUrl}/api/user/signup'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
-          'firstName': firstName,
-          'lastName': lastName,
+          'name': '$firstName $lastName',
           'email': email,
           'phone': phone,
           'password': password,
-          'adminObjectId': ApiConfig.adminObjectId,
-          'countryCode': '+91',
         }),
       );
       
@@ -827,7 +823,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'jeevs jeevs',
+                          'jeevs',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
