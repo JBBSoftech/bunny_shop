@@ -175,31 +175,14 @@ class WishlistManager extends ChangeNotifier {
   }
 }
 
-
-// Base URL for API calls - Change this to your IP address
-const String baseUrl = 'http://192.168.224.5:5000';
-
-// Dynamic product data - will be fetched from MongoDB
-List<Map<String, dynamic>> productCards = [];
-bool isLoadingProducts = true;
-
-Future<void> fetchProducts() async {
-  try {
-    final response = await http.get(
-      Uri.parse('\$baseUrl/api/products/\$adminObjectId'),
-    );
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      if (data['success'] == true) {
-        productCards = List<Map<String, dynamic>>.from(data['data'] ?? []);
-        isLoadingProducts = false;
-      }
-    }
-  } catch (e) {
-    print('Error fetching products: $e');
-    isLoadingProducts = false;
+final List<Map<String, dynamic>> productCards = [
+  {
+    'productName': 'Product ',
+    'imageAsset': null,
+    'price': '299',
+    'discountPrice': '199',
   }
-}
+];
 
 
 void main() => runApp(const MyApp());
@@ -270,19 +253,19 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _fetchAppNameAndNavigate() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/app-config/$_adminObjectId'),
+        Uri.parse('http://localhost:3000/api/admin-element-screen/$_adminObjectId/shop-name'),
       );
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (mounted) {
           setState(() {
-            _appName = data['data']?['appName'] ?? data['data']?['shopName'] ?? 'AppifyYours';
+            _appName = data['shopName'] ?? 'AppifyYours';
           });
         }
       }
     } catch (e) {
-      print('Error fetching app name: $e');
+      print('Error fetching shop name: $e');
       if (mounted) {
         setState(() {
           _appName = 'AppifyYours';
@@ -384,7 +367,7 @@ class _SignInPageState extends State<SignInPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/users/login'),
+        Uri.parse('http://localhost:3000/api/users/sign-in'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': _emailController.text.trim(),
@@ -597,7 +580,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/users/register'),
+        Uri.parse('http://localhost:3000/api/users/create-account'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'firstName': firstName,
@@ -610,7 +593,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         }),
       );
       
-      if (response.statusCode == 200) {
+      if (response.statusCode == 201) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
           if (mounted) {
@@ -842,7 +825,18 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     child: Row(
                       children: [
-                        const Icon(Icons.store, size: 32, color: Colors.white),
+                                                Container(
+                          width: 32,
+                          height: 32,
+                          child: Image.memory(
+                                base64Decode('/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAdAB0DASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD13xn4wtPBOjJql7Z3lzAZRE32VAxTIOGbJAAyAM+pFeU6p+0ai3YGkaE0ltsGTdybH3c54XIx0713fxo/5JLrn/bD/wBHx14RY6HpkvweTV3s0bUP7fW28/Jz5WwHb6YyaAPTdJ/aG0u5ggivdD1E6hI23yrNVkViThQuWBJPHbrXsyncoOCMjOD1r5e17SLDQv2hdN0/TLZLa0i1KwKRJnAyYyevuTX1FQBwXxnBPwl1zAz/AKj/ANHx1862vi+C3+Ha+GTayGYaqt/5wYbdoULtx1zxX2DdWlvfWstrdwRz28q7ZIpVDKw9CD1rm/8AhWvgr/oWtO/79UAfPEniWLxh8cdI1u3tpII7jU7ICJyCw2tGp6f7ua+sa57T/AvhXSr6O9sdBsILmI5jlSIblPqPQ10NAH//2Q=='),
+                                width: 32,
+                                height: 32,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.store, size: 32, color: Colors.white),
+                              ),
+                        ),
+                        
                         const SizedBox(width: 8),
                         Text(
                           'Priya',
