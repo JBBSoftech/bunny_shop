@@ -1,132 +1,322 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
-// MongoDB connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/bunny_shop_app', {
+// MongoDB connection - Connect to main Appifyours database for dynamic data
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://storedata:Brandmystore0102@3.109.161.66:5555/bms';
+
+mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
+}).then(() => {
+  console.log('✅ Connected to MongoDB - Appifyours Database');
+  console.log('📱 Admin ID: 690dc087abc99370793b9150');
+}).catch(err => {
+  console.error('❌ MongoDB connection error:', err);
 });
 
-// Product Schema
-const productSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  price: { type: Number, required: true },
-  description: { type: String },
-  image: { type: String },
-  category: { type: String },
-  inStock: { type: Boolean, default: true },
-  createdAt: { type: Date, default: Date.now }
-});
-
-const Product = mongoose.model('Product', productSchema);
-
-// User Schema
-const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  phone: { type: String },
-  address: {
-    street: String,
-    city: String,
-    state: String,
-    zipCode: String
+// Admin Element Screen Schema - For fetching app configuration dynamically
+const adminElementScreenSchema = new mongoose.Schema({
+  userId: String,
+  shopName: String,
+  appName: String,
+  category: String,
+  pages: [{ name: String, widgets: [{ name: String, properties: mongoose.Schema.Types.Mixed }] }],
+  dynamicFields: {
+    gstNumber: String,
+    selectedCategory: String,
+    productCards: [mongoose.Schema.Types.Mixed],
+    storeInfo: mongoose.Schema.Types.Mixed,
+    orderSummary: mongoose.Schema.Types.Mixed
   },
-  orders: [{
-    orderId: String,
-    products: [{
-      productId: String,
-      name: String,
-      price: Number,
-      quantity: Number
-    }],
-    total: Number,
-    status: { type: String, default: 'pending' },
-    createdAt: { type: Date, default: Date.now }
-  }],
-  cart: [{
-    productId: String,
-    name: String,
-    price: Number,
-    quantity: Number,
-    addedAt: { type: Date, default: Date.now }
-  }],
-  createdAt: { type: Date, default: Date.now }
-});
+  screenConfig: {
+    screenName: String,
+    fields: [mongoose.Schema.Types.Mixed]
+  },
+  status: String,
+  createdAt: Date,
+  updatedAt: Date
+}, { collection: 'adminelementscreens' });
 
-const User = mongoose.model('User', userSchema);
+const AdminElementScreen = mongoose.model('AdminElementScreen', adminElementScreenSchema);
+
+// Users Create Account Schema - For end-user authentication
+const usersCreateAccountSchema = new mongoose.Schema({
+  adminObjectId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true, ref: 'AdminElementScreen' },
+  firstName: { type: String, required: true, trim: true },
+  lastName: { type: String, required: true, trim: true },
+  email: { type: String, required: true, lowercase: true, trim: true },
+  password: { type: String, required: true },
+  phone: { type: String, required: true, trim: true },
+  countryCode: { type: String, default: '+91' },
+  fullName: String,
+  purchaseHistory: [{ productId: String, productName: String, quantity: Number, price: Number, purchaseDate: Date }],
+  wishlist: [{ productId: String, productName: String, productPrice: Number, addedAt: Date }],
+  cart: [{ productId: String, productName: String, quantity: Number, price: Number, addedAt: Date }],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+}, { collection: 'users_create_account' });
+
+usersCreateAccountSchema.index({ adminObjectId: 1, email: 1 }, { unique: true });
+const UsersCreateAccount = mongoose.model('UsersCreateAccount', usersCreateAccountSchema);
+
+// JWT Secret
+const JWT_SECRET = process.env.JWT_SECRET || 'appifyours-secret-key-change-in-production';
+
+// Middleware to verify JWT token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ success: false, error: 'Access token required' });
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ success: false, error: 'Invalid or expired token' });
+    req.user = user;
+    next();
+  });
+};
 
 // API Routes
 
-// Get all products
-app.get('/api/products', async (req, res) => {
+// Get screen configuration dynamically
+app.get('/api/get-screen-config', async (req, res) => {
   try {
-    const products = await Product.find({ inStock: true });
-    res.json({ success: true, data: products });
+    const { screen, adminObjectId } = req.query;
+    if (!adminObjectId || !mongoose.Types.ObjectId.isValid(adminObjectId)) {
+      return res.status(400).json({ success: false, error: 'Valid adminObjectId is required' });
+    }
+    const appConfig = await AdminElementScreen.findById(adminObjectId);
+    if (!appConfig) {
+      return res.status(404).json({ success: false, error: 'Screen configuration not found' });
+    }
+    // Return screen config with default fields if not configured
+    const screenConfig = appConfig.screenConfig || {
+      screenName: screen || 'form_screen',
+      fields: [
+        { type: 'text', label: 'First Name', key: 'firstName', required: true },
+        { type: 'text', label: 'Last Name', key: 'lastName', required: true },
+        { type: 'email', label: 'Email', key: 'email', required: true },
+        { type: 'phone', label: 'Phone', key: 'phone', required: true },
+        { type: 'password', label: 'Password', key: 'password', required: true },
+        { type: 'button', label: 'Create Account' }
+      ]
+    };
+    res.json({ success: true, data: screenConfig });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Get product by ID
-app.get('/api/products/:id', async (req, res) => {
+// Get app configuration by adminObjectId (for splash screen and dynamic data)
+app.get('/api/app-config/:adminObjectId', async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
-    if (!product) {
-      return res.status(404).json({ success: false, error: 'Product not found' });
+    const { adminObjectId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(adminObjectId)) {
+      return res.status(400).json({ success: false, error: 'Invalid adminObjectId' });
     }
-    res.json({ success: true, data: product });
+    const appConfig = await AdminElementScreen.findById(adminObjectId);
+    if (!appConfig) {
+      return res.status(404).json({ success: false, error: 'App configuration not found' });
+    }
+    const userCount = await UsersCreateAccount.countDocuments({ adminObjectId: new mongoose.Types.ObjectId(adminObjectId) });
+    res.json({
+      success: true,
+      data: {
+        appName: appConfig.appName || appConfig.shopName || 'My App',
+        shopName: appConfig.shopName,
+        category: appConfig.category,
+        pages: appConfig.pages,
+        dynamicFields: appConfig.dynamicFields,
+        userCount: userCount,
+        lastUpdated: appConfig.updatedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all products (from dynamicFields.productCards)
+app.get('/api/products/:adminObjectId', async (req, res) => {
+  try {
+    const { adminObjectId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(adminObjectId)) {
+      return res.status(400).json({ success: false, error: 'Invalid adminObjectId' });
+    }
+    const appConfig = await AdminElementScreen.findById(adminObjectId);
+    if (!appConfig) {
+      return res.status(404).json({ success: false, error: 'App configuration not found' });
+    }
+    const products = appConfig.dynamicFields?.productCards || [];
+    res.json({ success: true, data: products });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // Search products
-app.get('/api/products/search/:query', async (req, res) => {
+app.get('/api/products/search/:adminObjectId/:query', async (req, res) => {
   try {
-    const query = req.params.query;
-    const products = await Product.find({
-      $or: [
-        { name: { $regex: query, $options: 'i' } },
-        { description: { $regex: query, $options: 'i' } },
-        { category: { $regex: query, $options: 'i' } }
-      ],
-      inStock: true
-    });
-    res.json({ success: true, data: products });
+    const { adminObjectId, query } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(adminObjectId)) {
+      return res.status(400).json({ success: false, error: 'Invalid adminObjectId' });
+    }
+    const appConfig = await AdminElementScreen.findById(adminObjectId);
+    if (!appConfig) {
+      return res.status(404).json({ success: false, error: 'App configuration not found' });
+    }
+    const products = appConfig.dynamicFields?.productCards || [];
+    const filteredProducts = products.filter(p => 
+      (p.productName && p.productName.toLowerCase().includes(query.toLowerCase())) ||
+      (p.description && p.description.toLowerCase().includes(query.toLowerCase()))
+    );
+    res.json({ success: true, data: filteredProducts });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// User registration
+// Create user - Dynamic endpoint for form submission
+app.post('/api/create-user', async (req, res) => {
+  try {
+    const { adminObjectId, fullName, firstName, lastName, email, password, phone, countryCode } = req.body;
+    if (!adminObjectId || !email || !password) {
+      return res.status(400).json({ success: false, error: 'adminObjectId, email, and password are required' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(adminObjectId)) {
+      return res.status(400).json({ success: false, error: 'Invalid adminObjectId' });
+    }
+    const existingUser = await UsersCreateAccount.findOne({ 
+      adminObjectId: new mongoose.Types.ObjectId(adminObjectId), 
+      email: email.toLowerCase() 
+    });
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'User already exists with this email' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new UsersCreateAccount({
+      adminObjectId: new mongoose.Types.ObjectId(adminObjectId),
+      firstName: firstName || fullName?.split(' ')[0] || '',
+      lastName: lastName || fullName?.split(' ').slice(1).join(' ') || '',
+      fullName: fullName || `${firstName} ${lastName}`,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      phone: phone || '',
+      countryCode: countryCode || '+91'
+    });
+    await user.save();
+    const token = jwt.sign({ userId: user._id, email: user.email, adminObjectId }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ 
+      success: true, 
+      message: 'User created successfully',
+      data: { userId: user._id, fullName: user.fullName, firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone, token }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// User registration (Create Account)
 app.post('/api/users/register', async (req, res) => {
   try {
-    const { name, email, phone, address } = req.body;
-    
-    const existingUser = await User.findOne({ email });
+    const { adminObjectId, firstName, lastName, email, password, phone, countryCode } = req.body;
+    if (!adminObjectId || !firstName || !lastName || !email || !password || !phone) {
+      return res.status(400).json({ success: false, error: 'All fields are required' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(adminObjectId)) {
+      return res.status(400).json({ success: false, error: 'Invalid adminObjectId' });
+    }
+    const existingUser = await UsersCreateAccount.findOne({ 
+      adminObjectId: new mongoose.Types.ObjectId(adminObjectId), 
+      email: email.toLowerCase() 
+    });
     if (existingUser) {
-      return res.status(400).json({ success: false, error: 'User already exists' });
+      return res.status(400).json({ success: false, error: 'User already exists with this email' });
     }
-    
-    const user = new User({ name, email, phone, address });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new UsersCreateAccount({
+      adminObjectId: new mongoose.Types.ObjectId(adminObjectId),
+      firstName, lastName,
+      fullName: `${firstName} ${lastName}`,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      phone,
+      countryCode: countryCode || '+91'
+    });
     await user.save();
-    
-    res.json({ success: true, data: user });
+    const token = jwt.sign({ userId: user._id, email: user.email, adminObjectId }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ 
+      success: true, 
+      message: 'Account created successfully',
+      data: { userId: user._id, firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone, token }
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Get user profile
-app.get('/api/users/:id', async (req, res) => {
+// User login (Sign In)
+app.post('/api/users/login', async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const { adminObjectId, email, password } = req.body;
+    if (!adminObjectId || !email || !password) {
+      return res.status(400).json({ success: false, error: 'All fields are required' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(adminObjectId)) {
+      return res.status(400).json({ success: false, error: 'Invalid adminObjectId' });
+    }
+    const user = await UsersCreateAccount.findOne({ 
+      adminObjectId: new mongoose.Types.ObjectId(adminObjectId), 
+      email: email.toLowerCase() 
+    });
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Invalid email or password' });
+    }
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ success: false, error: 'Invalid email or password' });
+    }
+    const token = jwt.sign({ userId: user._id, email: user.email, adminObjectId }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ 
+      success: true, 
+      message: 'Login successful',
+      data: { userId: user._id, firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone, token }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Check if user exists
+app.post('/api/users/check', async (req, res) => {
+  try {
+    const { adminObjectId, email } = req.body;
+    if (!adminObjectId || !email) {
+      return res.status(400).json({ success: false, error: 'adminObjectId and email are required' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(adminObjectId)) {
+      return res.status(400).json({ success: false, error: 'Invalid adminObjectId' });
+    }
+    const user = await UsersCreateAccount.findOne({ 
+      adminObjectId: new mongoose.Types.ObjectId(adminObjectId), 
+      email: email.toLowerCase() 
+    });
+    res.json({ success: true, exists: !!user });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get user profile (protected route)
+app.get('/api/users/profile', authenticateToken, async (req, res) => {
+  try {
+    const user = await UsersCreateAccount.findById(req.user.userId).select('-password');
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
@@ -136,23 +326,21 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
-// Add to cart
-app.post('/api/users/:id/cart', async (req, res) => {
+// Add to cart (protected route)
+app.post('/api/users/cart', authenticateToken, async (req, res) => {
   try {
-    const { productId, name, price, quantity } = req.body;
-    const user = await User.findById(req.params.id);
-    
+    const { productId, productName, price, quantity } = req.body;
+    const user = await UsersCreateAccount.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
-    
     const existingItem = user.cart.find(item => item.productId === productId);
     if (existingItem) {
-      existingItem.quantity += quantity;
+      existingItem.quantity += quantity || 1;
     } else {
-      user.cart.push({ productId, name, price, quantity });
+      user.cart.push({ productId, productName, price, quantity: quantity || 1 });
     }
-    
+    user.updatedAt = new Date();
     await user.save();
     res.json({ success: true, data: user.cart });
   } catch (error) {
@@ -160,10 +348,10 @@ app.post('/api/users/:id/cart', async (req, res) => {
   }
 });
 
-// Get cart
-app.get('/api/users/:id/cart', async (req, res) => {
+// Get cart (protected route)
+app.get('/api/users/cart', authenticateToken, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await UsersCreateAccount.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
@@ -173,47 +361,80 @@ app.get('/api/users/:id/cart', async (req, res) => {
   }
 });
 
-// Place order
-app.post('/api/users/:id/orders', async (req, res) => {
+// Add to wishlist (protected route)
+app.post('/api/users/wishlist', authenticateToken, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const { productId, productName, productPrice } = req.body;
+    const user = await UsersCreateAccount.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
-    
+    const existingItem = user.wishlist.find(item => item.productId === productId);
+    if (!existingItem) {
+      user.wishlist.push({ productId, productName, productPrice });
+      user.updatedAt = new Date();
+      await user.save();
+    }
+    res.json({ success: true, data: user.wishlist });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get wishlist (protected route)
+app.get('/api/users/wishlist', authenticateToken, async (req, res) => {
+  try {
+    const user = await UsersCreateAccount.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    res.json({ success: true, data: user.wishlist });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Place order (protected route)
+app.post('/api/users/orders', authenticateToken, async (req, res) => {
+  try {
+    const user = await UsersCreateAccount.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    if (!user.cart || user.cart.length === 0) {
+      return res.status(400).json({ success: false, error: 'Cart is empty' });
+    }
     const orderId = 'ORDER_' + Date.now();
     const total = user.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    
-    const order = {
-      orderId,
-      products: user.cart.map(item => ({
-        productId: item.productId,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity
-      })),
-      total,
-      status: 'pending'
-    };
-    
-    user.orders.push(order);
-    user.cart = []; // Clear cart after order
+    const purchaseItems = user.cart.map(item => ({
+      productId: item.productId,
+      productName: item.productName,
+      price: item.price,
+      quantity: item.quantity,
+      purchaseDate: new Date()
+    }));
+    user.purchaseHistory.push(...purchaseItems);
+    user.cart = [];
+    user.updatedAt = new Date();
     await user.save();
-    
-    res.json({ success: true, data: order });
+    res.json({ 
+      success: true, 
+      message: 'Order placed successfully',
+      data: { orderId, items: purchaseItems, total } 
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Get user orders
-app.get('/api/users/:id/orders', async (req, res) => {
+// Get user purchase history (protected route)
+app.get('/api/users/orders', authenticateToken, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await UsersCreateAccount.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
-    res.json({ success: true, data: user.orders });
+    res.json({ success: true, data: user.purchaseHistory });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
