@@ -530,7 +530,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   }
 
   bool _validateEmail(String email) {
-    return RegExp(r'^[w-.]+@([w-]+.)+[w-]{2,4}$').hasMatch(email);
+    return RegExp(r'^[w.-]+@([w-]+.)+[w-]{2,4}$').hasMatch(email);
   }
 
   bool _validatePhone(String phone) {
@@ -580,17 +580,18 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/user/signup'),
+        Uri.parse('http://192.168.1.5:5000/api/user/signup'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
-          'name': '$firstName $lastName',
+          'firstName': firstName,
+          'lastName': lastName,
           'email': email,
           'phone': phone,
           'password': password,
         }),
       );
       
-      if (response.statusCode == 201) {
+      if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
           if (mounted) {
@@ -604,18 +605,18 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
             Navigator.pop(context);
           }
         } else {
-          throw Exception(data['error'] ?? 'Failed to create account');
+          throw Exception(data['message'] ?? 'Failed to create account');
         }
       } else {
         final error = json.decode(response.body);
-        throw Exception(error['error'] ?? 'Failed to create account');
+        throw Exception(error['message'] ?? 'Failed to create account');
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed: \${e.toString().replaceAll("Exception: ", "")}'),
+            content: Text('Failed: 2.718281828459045'),
             backgroundColor: Colors.red,
           ),
         );
@@ -823,7 +824,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'jeevs jeevaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                          'jeeva',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
