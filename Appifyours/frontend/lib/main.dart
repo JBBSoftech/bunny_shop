@@ -175,14 +175,31 @@ class WishlistManager extends ChangeNotifier {
   }
 }
 
-final List<Map<String, dynamic>> productCards = [
-  {
-    'productName': 'Product ',
-    'imageAsset': null,
-    'price': '299',
-    'discountPrice': '199',
+
+// Base URL for API calls - Change this to your IP address
+const String baseUrl = 'http://192.168.224.5:5000';
+
+// Dynamic product data - will be fetched from MongoDB
+List<Map<String, dynamic>> productCards = [];
+bool isLoadingProducts = true;
+
+Future<void> fetchProducts() async {
+  try {
+    final response = await http.get(
+      Uri.parse('\$baseUrl/api/products/\$adminObjectId'),
+    );
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['success'] == true) {
+        productCards = List<Map<String, dynamic>>.from(data['data'] ?? []);
+        isLoadingProducts = false;
+      }
+    }
+  } catch (e) {
+    print('Error fetching products: $e');
+    isLoadingProducts = false;
   }
-];
+}
 
 
 void main() => runApp(const MyApp());
@@ -232,12 +249,6 @@ class MyApp extends StatelessWidget {
   );
 }
 
-// API Configuration
-class ApiConfig {
-  static const String baseUrl = 'http://192.168.1.5:5000';
-  static const String adminObjectId = '690dc087abc99370793b9150';
-}
-
 // Splash Screen - First screen
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -248,6 +259,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   String _appName = 'Loading...';
+  final String _adminObjectId = '690dc087abc99370793b9150';
 
   @override
   void initState() {
@@ -258,19 +270,19 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _fetchAppNameAndNavigate() async {
     try {
       final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/admin-element-screen/${ApiConfig.adminObjectId}/shop-name'),
+        Uri.parse('$baseUrl/api/app-config/$_adminObjectId'),
       );
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (mounted) {
           setState(() {
-            _appName = data['shopName'] ?? 'AppifyYours';
+            _appName = data['data']?['appName'] ?? data['data']?['shopName'] ?? 'AppifyYours';
           });
         }
       }
     } catch (e) {
-      print('Error fetching shop name: \$e');
+      print('Error fetching app name: $e');
       if (mounted) {
         setState(() {
           _appName = 'AppifyYours';
@@ -283,7 +295,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const SignInPage()),
+        MaterialPageRoute(builder: (context) => SignInPage(adminObjectId: _adminObjectId)),
       );
     }
   }
@@ -337,9 +349,11 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-// Sign In Page
+// Sign In Page - Second screen
 class SignInPage extends StatefulWidget {
-  const SignInPage({super.key});
+  final String adminObjectId;
+  
+  const SignInPage({super.key, required this.adminObjectId});
 
   @override
   State<SignInPage> createState() => _SignInPageState();
@@ -370,11 +384,12 @@ class _SignInPageState extends State<SignInPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/user/login'),
+        Uri.parse('$baseUrl/api/users/login'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': _emailController.text.trim(),
           'password': _passwordController.text,
+          'adminObjectId': widget.adminObjectId,
         }),
       );
       
@@ -385,7 +400,7 @@ class _SignInPageState extends State<SignInPage> {
             setState(() => _isLoading = false);
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const HomePage()),
+              MaterialPageRoute(builder: (context) => HomePage(adminObjectId: widget.adminObjectId)),
             );
           }
         } else {
@@ -400,7 +415,7 @@ class _SignInPageState extends State<SignInPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Sign in failed: \${e.toString().replaceAll("Exception: ", "")}'),
+            content: Text('Sign in failed: ${e.toString().replaceAll("Exception: ", "")}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -488,7 +503,7 @@ class _SignInPageState extends State<SignInPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const CreateAccountPage(),
+                      builder: (context) => CreateAccountPage(adminObjectId: widget.adminObjectId),
                     ),
                   );
                 },
@@ -502,9 +517,11 @@ class _SignInPageState extends State<SignInPage> {
   }
 }
 
-// Create Account Page
+// Create Account Page - Third screen
 class CreateAccountPage extends StatefulWidget {
-  const CreateAccountPage({super.key});
+  final String adminObjectId;
+  
+  const CreateAccountPage({super.key, required this.adminObjectId});
 
   @override
   State<CreateAccountPage> createState() => _CreateAccountPageState();
@@ -530,7 +547,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   }
 
   bool _validateEmail(String email) {
-    return RegExp(r'^[w.-]+@([w-]+.)+[w-]{2,4}$').hasMatch(email);
+    return RegExp(r'^[w-.]+@([w-]+.)+[w-]{2,4}$').hasMatch(email);
   }
 
   bool _validatePhone(String phone) {
@@ -580,7 +597,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.1.5:5000/api/user/signup'),
+        Uri.parse('$baseUrl/api/users/register'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'firstName': firstName,
@@ -588,6 +605,8 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           'email': email,
           'phone': phone,
           'password': password,
+          'adminObjectId': widget.adminObjectId,
+          'countryCode': '+91',
         }),
       );
       
@@ -605,18 +624,18 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
             Navigator.pop(context);
           }
         } else {
-          throw Exception(data['message'] ?? 'Failed to create account');
+          throw Exception(data['error'] ?? 'Failed to create account');
         }
       } else {
         final error = json.decode(response.body);
-        throw Exception(error['message'] ?? 'Failed to create account');
+        throw Exception(error['error'] ?? 'Failed to create account');
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed: 2.718281828459045'),
+            content: Text('Failed: ${e.toString().replaceAll("Exception: ", "")}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -733,7 +752,9 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String adminObjectId;
+  
+  const HomePage({super.key, required this.adminObjectId});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -824,7 +845,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'jeeva',
+                          'jeeva anandhan',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -1582,7 +1603,7 @@ class _HomePageState extends State<HomePage> {
                       Navigator.pushAndRemoveUntil(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const SignInPage(),
+                          builder: (context) => SignInPage(adminObjectId: '690dc087abc99370793b9150'),
                         ),
                         (route) => false,
                       );
