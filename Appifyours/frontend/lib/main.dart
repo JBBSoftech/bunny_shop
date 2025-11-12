@@ -616,7 +616,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed: Network or server error'),
+            content: Text('Failed: 2.718281828459045'),
             backgroundColor: Colors.red,
           ),
         );
@@ -824,7 +824,7 @@ class _HomePageState extends State<HomePage> {
                         const Icon(Icons.store, size: 32, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          'jjjj',
+                          'jjjjhjij',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
