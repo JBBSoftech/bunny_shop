@@ -894,7 +894,7 @@ class _HomePageState extends State<HomePage> {
                         
                         const SizedBox(width: 8),
                         Text(
-                          'jeeva ',
+                          'jeevaa',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
