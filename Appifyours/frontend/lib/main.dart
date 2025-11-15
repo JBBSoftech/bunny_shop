@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'dart:async';
 import 'package:http/http.dart' as http;
 
 // Define PriceUtils class
@@ -245,10 +244,10 @@ class MyApp extends StatelessWidget {
   );
 }
 
-// API Configuration - Auto-updated with your server details
+// API Configuration
 class ApiConfig {
   static const String baseUrl = 'http://192.168.1.5:5000';
-  static const String adminObjectId = '69021faa2b0d7cd49d0bf5ca'; // Will be replaced during publish
+  static const String adminObjectId = '69021faa2b0d7cd49d0bf5ca';
 }
 
 // Splash Screen - First screen
@@ -759,64 +758,18 @@ class _HomePageState extends State<HomePage> {
   final WishlistManager _wishlistManager = WishlistManager();
   String _searchQuery = '';
   List<Map<String, dynamic>> _filteredProducts = [];
-  List<Map<String, dynamic>> _dynamicProductCards = [];
-  bool _isLoading = true;
-  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-    _dynamicProductCards = List.from(productCards); // Fallback to static data
-    _filteredProducts = List.from(_dynamicProductCards);
-    _loadDynamicData();
-    _startAutoRefresh();
+    _filteredProducts = List.from(productCards);
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    _refreshTimer?.cancel();
     super.dispose();
-  }
-
-  // Auto-refresh every 5 seconds
-  void _startAutoRefresh() {
-    _refreshTimer = Timer.periodic(Duration(seconds: 5), (timer) {
-      _loadDynamicData(showLoading: false);
-    });
-  }
-
-  // Load dynamic data from backend
-  Future<void> _loadDynamicData({bool showLoading = true}) async {
-    try {
-      if (showLoading) {
-        setState(() => _isLoading = true);
-      }
-
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/user/app/dynamic/${ApiConfig.adminObjectId}'),
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true && data['config'] != null) {
-          final config = data['config'];
-          final newProducts = List<Map<String, dynamic>>.from(config['productCards'] ?? []);
-          
-          setState(() {
-            _dynamicProductCards = newProducts.isNotEmpty ? newProducts : productCards;
-            _filterProducts(_searchQuery); // Re-apply current filter
-            _isLoading = false;
-          });
-          print('✅ Loaded ${_dynamicProductCards.length} products from backend');
-        }
-      }
-    } catch (e) {
-      print('❌ Error loading dynamic data: $e');
-      setState(() => _isLoading = false);
-    }
   }
 
   void _onPageChanged(int index) => setState(() => _currentPageIndex = index);
@@ -830,9 +783,9 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _searchQuery = query;
       if (query.isEmpty) {
-        _filteredProducts = List.from(_dynamicProductCards);
+        _filteredProducts = List.from(productCards);
       } else {
-        _filteredProducts = _dynamicProductCards.where((product) {
+        _filteredProducts = productCards.where((product) {
           final productName = (product['productName'] ?? '').toString().toLowerCase();
           final price = (product['price'] ?? '').toString().toLowerCase();
           final discountPrice = (product['discountPrice'] ?? '').toString().toLowerCase();
@@ -876,7 +829,7 @@ class _HomePageState extends State<HomePage> {
     return Column(
       children: [
                   Container(
-                    color: Color(0xff2196f3),
+                    color: Color(0xff773232),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     child: Row(
                       children: [
@@ -894,7 +847,7 @@ class _HomePageState extends State<HomePage> {
                         
                         const SizedBox(width: 8),
                         Text(
-                          'jeevs',
+                          'jeeva anandhan',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -965,12 +918,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _loadDynamicData,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                children: [
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
                   Container(
                     height: 160,
                     child: Stack(
@@ -1375,8 +1325,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
